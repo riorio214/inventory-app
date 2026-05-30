@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>재고관리 시스템</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --accent2: #38d9a9;
+    --danger: #ff6b6b;
+    --warning: #fcc419;
+    --text: #e8eaf0;
+    --text2: #8892b0;
+    --text3: #4a5280;
+    --green: #38d9a9;
+    --red: #ff6b6b;
+    --yellow: #fcc419;
+    --purple: #b197fc;
+    --radius: 10px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+  /* ── 사이드바 ── */
+  #sidebar {
+    width: 220px; min-height: 100vh; background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    position: fixed; top: 0; left: 0; z-index: 100;
+  }
+  .logo { padding: 24px 20px 16px; border-bottom: 1px solid var(--border); }
+  .logo h1 { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
+  .logo p  { font-size: 11px; color: var(--text3); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+  nav { flex: 1; padding: 12px 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 11px 20px;
+    cursor: pointer; color: var(--text2); font-size: 13.5px; font-weight: 500;
+    transition: all 0.18s; border-left: 3px solid transparent; user-select: none;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(79,142,247,0.1); color: var(--accent); border-left-color: var(--accent); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 700; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text3); }
+
+  /* ── 메인 콘텐츠 ── */
+  #main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar {
+    height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 28px; gap: 16px; position: sticky; top: 0; z-index: 50;
+  }
+  .topbar h2 { font-size: 15px; font-weight: 700; flex: 1; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .content { padding: 28px; flex: 1; }
+
+  /* ── 버튼 ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
+    border: none; transition: all 0.15s; font-family: inherit;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3d7ae8; }
+  .btn-success { background: var(--green); color: #0f1117; }
+  .btn-success:hover { background: #2bc99a; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #e85555; }
+  .btn-ghost { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── 카드 ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--text2); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── 대시보드 카드 ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; position: relative; overflow: hidden; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .stat-card.blue::before   { background: var(--accent); }
+  .stat-card.green::before  { background: var(--green); }
+  .stat-card.red::before    { background: var(--red); }
+  .stat-card.yellow::before { background: var(--yellow); }
+  .stat-label { font-size: 12px; color: var(--text3); margin-bottom: 8px; font-weight: 500; }
+  .stat-value { font-size: 26px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .stat-value.blue   { color: var(--accent); }
+  .stat-value.green  { color: var(--green); }
+  .stat-value.red    { color: var(--red); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* ── 테이블 ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: var(--surface2); padding: 11px 14px; text-align: left; font-weight: 600; color: var(--text2); font-size: 12px; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.12s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; }
+  .badge-green  { background: rgba(56,217,169,0.15); color: var(--green); }
+  .badge-red    { background: rgba(255,107,107,0.15); color: var(--red); }
+  .badge-blue   { background: rgba(79,142,247,0.15);  color: var(--accent); }
+  .badge-yellow { background: rgba(252,196,25,0.15);  color: var(--yellow); }
+  .badge-purple { background: rgba(177,151,252,0.15); color: var(--purple); }
+  .badge-gray   { background: rgba(136,146,176,0.15); color: var(--text2); }
+
+  /* ── 검색/필터 바 ── */
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
+  .search-box { position: relative; flex: 1; min-width: 200px; }
+  .search-box input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px 8px 36px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 14px; pointer-events: none; }
+  select.filter-select { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; cursor: pointer; }
+  select.filter-select:focus { border-color: var(--accent); }
+  input[type="date"].filter-date { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; color-scheme: dark; }
+  input[type="date"].filter-date:focus { border-color: var(--accent); }
+
+  /* ── 모달 ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 15px; font-weight: 700; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .close-btn { background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; padding: 2px 6px; border-radius: 5px; }
+  .close-btn:hover { color: var(--text); background: var(--surface2); }
+
+  /* ── 폼 ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-grid.one { grid-template-columns: 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.span2 { grid-column: span 2; }
+  label { font-size: 12px; color: var(--text2); font-weight: 500; }
+  .form-control { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; width: 100%; transition: border-color 0.15s; }
+  .form-control:focus { border-color: var(--accent); }
+  textarea.form-control { resize: vertical; min-height: 70px; }
+  .form-control option { background: var(--surface2); }
+
+  /* ── 상품 선택기 (드래그앤드롭 대체: 클릭 선택) ── */
+  .product-picker { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; max-height: 180px; overflow-y: auto; }
+  .product-picker-item { padding: 9px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); transition: background 0.12s; display: flex; justify-content: space-between; }
+  .product-picker-item:last-child { border-bottom: none; }
+  .product-picker-item:hover { background: rgba(79,142,247,0.1); }
+  .product-picker-item.selected { background: rgba(79,142,247,0.2); color: var(--accent); }
+  .product-picker-item .code { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text3); }
+
+  /* ── 탭 ── */
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface2); padding: 4px; border-radius: 8px; width: fit-content; }
+  .tab { padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text2); transition: all 0.15s; }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+  /* ── 로딩 / 빈 상태 ── */
+  .loading { text-align: center; padding: 40px; color: var(--text3); font-size: 14px; }
+  .empty { text-align: center; padding: 50px 20px; color: var(--text3); }
+  .empty .empty-icon { font-size: 36px; margin-bottom: 10px; }
+  .empty p { font-size: 14px; }
+
+  /* ── 재고 경고 ── */
+  .low-stock-banner { background: rgba(252,196,25,0.1); border: 1px solid rgba(252,196,25,0.3); border-radius: var(--radius); padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--yellow); }
+
+  /* ── 금액 색상 ── */
+  .amount-pos { color: var(--green); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .amount-neg { color: var(--red);   font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .amount-neu { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── 차트 영역 ── */
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+  .bar-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .bar-label { width: 80px; color: var(--text2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+  .bar-val { width: 70px; color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+  /* ── 토스트 ── */
+  #toast { position: fixed; bottom: 28px; right: 28px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; font-size: 13px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; animation: slideIn 0.2s ease; min-width: 220px; }
+  .toast-item.success { border-left: 3px solid var(--green); }
+  .toast-item.error   { border-left: 3px solid var(--red); }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* ── 반응형 ── */
+  @media (max-width: 900px) {
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 사이드바 -->
+<aside id="sidebar">
+  <div class="logo">
+    <h1>📦 재고관리</h1>
+    <p>Inventory System v1.0</p>
+  </div>
+  <nav>
+    <div class="nav-item active" onclick="navigate('dashboard')">
+      <span class="icon">🏠</span> 대시보드
+    </div>
+    <div class="nav-item" onclick="navigate('products')">
+      <span class="icon">📋</span> 상품 관리
+    </div>
+    <div class="nav-item" onclick="navigate('items')">
+      <span class="icon">📦</span> 비상품 관리
+    </div>
+    <div class="nav-item" onclick="navigate('transactions')">
+      <span class="icon">🔄</span> 입출고 등록
+    </div>
+    <div class="nav-item" onclick="navigate('purchases')">
+      <span class="icon">🛒</span> 매입 관리
+    </div>
+    <div class="nav-item" onclick="navigate('sales')">
+      <span class="icon">💰</span> 매출 관리
+    </div>
+    <div class="nav-item" onclick="navigate('audit')">
+      <span class="icon">📝</span> 수정 로그
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div id="sync-status">● 연결됨</div>
+  </div>
+</aside>
+
+<!-- 메인 -->
+<main id="main">
+  <div class="topbar">
+    <h2 id="page-title">대시보드</h2>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+  <div class="content" id="content">
+    <div class="loading">불러오는 중...</div>
+  </div>
+</main>
+
+<!-- 모달 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">제목</h3>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  설정
+// ═══════════════════════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbymJQZYib6C8CsZpL4eqllM95zqQXjB-vIGK56Fbngyd-uBl6dYsx258M2BDsJ9hDF5jQ/exec';
+const API_KEY = 'rio214-secret-key-2026';
+
+// ═══════════════════════════════════════════════════
+//  API 헬퍼
+// ═══════════════════════════════════════════════════
+async function apiGet(params) {
+  params.key = API_KEY;
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_URL}?${qs}`);
+  return res.json();
+}
+
+async function apiPost(body) {
+  body.key = API_KEY;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'text/plain' }
+  });
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════
+//  유틸
+// ═══════════════════════════════════════════════════
+function fmt(n) {
+  if (n === null || n === undefined || n === '') return '-';
+  return Number(n).toLocaleString('ko-KR') + '원';
+}
+function fmtN(n) { return Number(n).toLocaleString('ko-KR'); }
+function fmtDate(d) {
+  if (!d) return '-';
+  const s = String(d);
+  if (s.includes('T')) return s.split('T')[0];
+  return s.slice(0, 10);
+}
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  el.innerHTML = (type === 'success' ? '✅ ' : '❌ ') + msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function typeBadge(type) {
+  const map = {
+    '입고': 'badge-green', '출고': 'badge-red',
+    '서비스': 'badge-blue', '파손': 'badge-yellow',
+    '샘플': 'badge-purple', '매입': 'badge-green', '매출': 'badge-blue'
+  };
+  return `<span class="badge ${map[type] || 'badge-gray'}">${type}</span>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  네비게이션
+// ═══════════════════════════════════════════════════
+let currentPage = 'dashboard';
+const pageTitles = {
+  dashboard: '대시보드', products: '상품 관리', items: '비상품 관리',
+  transactions: '입출고 등록', purchases: '매입 관리', sales: '매출 관리', audit: '수정 로그'
+};
+
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.textContent.includes(pageTitles[page])) el.classList.add('active');
+  });
+  document.getElementById('page-title').textContent = pageTitles[page];
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading">불러오는 중...</div>';
+  pages[page]();
+}
+
+// ═══════════════════════════════════════════════════
+//  모달
+// ═══════════════════════════════════════════════════
+function openModal(title, bodyHTML, footerHTML) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = bodyHTML;
+  document.getElementById('modal-footer').innerHTML = footerHTML;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+// ═══════════════════════════════════════════════════
+//  대시보드
+// ═══════════════════════════════════════════════════
+async function renderDashboard() {
+  const r = await apiGet({ action: 'summary' });
+  if (!r.success) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>데이터를 불러올 수 없습니다</p></div>'; return; }
+  const d = r.data;
+  const profit = d.thisMonthProfit;
+
+  let lowBanner = '';
+  if (d.lowStockCount > 0) {
+    const names = d.lowStockItems.map(i => i.name).join(', ');
+    lowBanner = `<div class="low-stock-banner">⚠️ 재고 부족 상품 ${d.lowStockCount}개: <strong>${names}</strong></div>`;
+  }
+
+  // 최근 거래 내역
+  const tRes = await apiGet({ action: 'getAll', sheet: 'transactions' });
+  const recent = (tRes.data || []).slice(-8).reverse();
+  const recentRows = recent.length
+    ? recent.map(r => `<tr>
+        <td>${fmtDate(r.date)}</td>
+        <td>${typeBadge(r.type)}</td>
+        <td>${r.product_name || '-'}</td>
+        <td class="amount-neu">${fmtN(r.qty)}</td>
+        <td class="${r.type === '입고' ? 'amount-pos' : 'amount-neg'}">${fmt(r.total)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="loading">거래 내역 없음</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    ${lowBanner}
+    <div class="stat-grid">
+      <div class="stat-card blue">
+        <div class="stat-label">전체 상품 수</div>
+        <div class="stat-value blue">${d.totalProducts}</div>
+        <div class="stat-sub">등록된 상품 종류</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">이번 달 매출</div>
+        <div class="stat-value green">${fmtN(d.thisMonthSales)}</div>
+        <div class="stat-sub">원</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">이번 달 매입</div>
+        <div class="stat-value red">${fmtN(d.thisMonthPurchases)}</div>
+        <div class="stat-sub">원</div>
+      </div>
+      <div class="stat-card ${profit >= 0 ? 'green' : 'yellow'}">
+        <div class="stat-label">이번 달 순이익</div>
+        <div class="stat-value ${profit >= 0 ? 'green' : 'yellow'}">${fmtN(profit)}</div>
+        <div class="stat-sub">원 (매출 - 매입)</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">최근 입출고 내역</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>날짜</th><th>구분</th><th>상품명</th><th>수량</th><th>금액</th></tr></thead>
+          <tbody>${recentRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  상품 관리
+// ═══════════════════════════════════════════════════
+async function renderProducts() {
+  document.getElementById('topbar-actions').innerHTML =
+    `<button class="btn btn-primary" onclick="openProductModal()">+ 상품 등록</button>`;
+
+  const r = await apiGet({ action: 'getAll', sheet: 'products' });
+  const data = r.data || [];
+
+  const rows = data.length ? data.map(p => {
+    const lowClass = (p.min_stock && Number(p.stock_qty) <= Number(p.min_stock)) ? 'color:var(--yellow);font-weight:700' : '';
+    return `<tr>
+      <td><span class="amount-neu" style="font-size:11px">${p.product_code || '-'}</span></td>
+      <td style="font-weight:500">${p.product_name}</td>
+      <td>${p.category || '-'}</td>
+      <td style="${lowClass}">${fmtN(p.stock_qty)} ${p.unit || ''} ${lowClass ? '⚠️' : ''}</td>
+      <td>${fmt(p.unit_price)}</td>
+      <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="loading">등록된 상품이 없습니다</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="filter-bar">
+      <div class="search-box"><span class="search-icon">🔍</span>
+        <input type="text" placeholder="상품명, 코드 검색..." oninput="searchProducts(this.value)">
+      </div>
+    </div>
+    <div class="table-wrap" id="products-table">
+      <table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>최소재고</th><th>관리</th></tr></thead>
+        <tbody id="products-body">${rows}</tbody>
+      </table>
+    </div>`;
+  window._productsData = data;
+}
+
+function searchProducts(q) {
+  const filtered = (window._productsData || []).filter(p =>
+    (p.product_name || '').includes(q) || (p.product_code || '').includes(q)
+  );
+  document.getElementById('products-body').innerHTML = filtered.length
+    ? filtered.map(p => `<tr>
+        <td><span class="amount-neu" style="font-size:11px">${p.product_code || '-'}</span></td>
+        <td style="font-weight:500">${p.product_name}</td>
+        <td>${p.category || '-'}</td>
+        <td>${fmtN(p.stock_qty)} ${p.unit || ''}</td>
+        <td>${fmt(p.unit_price)}</td>
+        <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" class="loading">검색 결과 없음</td></tr>';
+}
+
+function openProductModal(p = null) {
+  const isEdit = !!p;
+  openModal(isEdit ? '상품 수정' : '상품 등록', `
+    <div class="form-grid">
+      <div class="form-group">
+        <label>상품코드</label>
+        <input class="form-control" id="f-code" value="${p?.product_code || ''}" placeholder="예: PRD-001">
+      </div>
+      <div class="form-group">
+        <label>상품명 *</label>
+        <input class="form-control" id="f-name" value="${p?.product_name || ''}" placeholder="상품명 입력">
+      </div>
+      <div class="form-group">
+        <label>카테고리</label>
+        <input class="form-control" id="f-category" value="${p?.category || ''}" placeholder="예: 전자제품">
+      </div>
+      <div class="form-group">
+        <label>단위</label>
+        <input class="form-control" id="f-unit" value="${p?.unit || ''}" placeholder="예: 개, box, kg">
+      </div>
+      <div class="form-group">
+        <label>단가 (원)</label>
+        <input class="form-control" id="f-price" type="number" value="${p?.unit_price || ''}" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>현재 재고수량</label>
+        <input class="form-control" id="f-stock" type="number" value="${p?.stock_qty || 0}">
+      </div>
+      <div class="form-group">
+        <label>최소 재고 (경고 기준)</label>
+        <input class="form-control" id="f-min" type="number" value="${p?.min_stock || ''}" placeholder="0">
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
+     <button class="btn btn-primary" onclick="saveProduct(${isEdit ? `'${p.id}'` : 'null'})">
+       ${isEdit ? '수정 저장' : '등록'}
+     </button>`
+  );
+}
+
+async function saveProduct(id) {
+  const data = {
+    product_code: document.getElementById('f-code').value,
+    product_name: document.getElementById('f-name').value,
+    category:     document.getElementById('f-category').value,
+    unit:         document.getElementById('f-unit').value,
+    unit_price:   document.getElementById('f-price').value,
+    stock_qty:    document.getElementById('f-stock').value,
+    min_stock:    document.getElementById('f-min').value,
+  };
+  if (!data.product_name) { toast('상품명은 필수입니다', 'error'); return; }
+  const r = id
+    ? await apiPost({ action: 'update', sheet: 'products', id, data })
+    : await apiPost({ action: 'insert', sheet: 'products', data });
+  if (r.success) { toast(id ? '수정되었습니다' : '등록되었습니다'); closeModal(); renderProducts(); }
+  else toast(r.error || '오류 발생', 'error');
+}
+
+async function deleteProduct(id, name) {
+  if (!confirm(`"${name}" 상품을 삭제하시겠습니까?`)) return;
+  const r = await apiPost({ action: 'delete', sheet: 'products', id });
+  if (r.success) { toast('삭제되었습니다'); renderProducts(); }
+  else toast(r.error || '오류 발생', 'error');
+}
+
+// ═══════════════════════════════════════════════════
+//  비상품 관리 (포장재 등)
+// ═══════════════════════════════════════════════════
+async function renderItems() {
+  document.getElementById('topbar-actions').innerHTML =
+    `<button class="btn btn-primary" onclick="openItemModal()">+ 비상품 등록</button>`;
+  const r = await apiGet({ action: 'getAll', sheet: 'items' });
+  const data = r.data || [];
+  const rows = data.length ? data.map(p => `<tr>
+    <td><span class="amount-neu" style="font-size:11px">${p.item_code || '-'}</span></td>
+    <td style="font-weight:500">${p.item_name}</td>
+    <td>${p.category || '-'}</td>
+    <td>${fmtN(p.stock_qty)} ${p.unit || ''}</td>
+    <td>${fmt(p.unit_price)}</td>
+    <td>
+      <button class="btn btn-ghost btn-sm" onclick='openItemModal(${JSON.stringify(p)})'>수정</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteItem('${p.id}','${p.item_name}')">삭제</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="6" class="loading">등록된 비상품이 없습니다</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">
+      📦 포장재, 소모품 등 상품 외 자재를 관리합니다
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>코드</th><th>품목명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>관리</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openItemModal(p = null) {
+  const isEdit = !!p;
+  openModal(isEdit ? '비상품 수정' : '비상품 등록', `
+    <div class="form-grid">
+      <div class="form-group">
+        <label>코드</label>
+        <input class="form-control" id="fi-code" value="${p?.item_code || ''}" placeholder="예: ITM-001">
+      </div>
+      <div class="form-group">
+        <label>품목명 *</label>
+        <input class="form-control" id="fi-name" value="${p?.item_name || ''}" placeholder="예: 택배박스 소">
+      </div>
+      <div class="form-group">
+        <label>카테고리</label>
+        <input class="form-control" id="fi-cat" value="${p?.category || ''}" placeholder="예: 포장재">
+      </div>
+      <div class="form-group">
+        <label>단위</label>
+        <input class="form-control" id="fi-unit" value="${p?.unit || ''}" placeholder="개, 롤, 묶음">
+      </div>
+      <div class="form-group">
+        <label>단가 (원)</label>
+        <input class="form-control" id="fi-price" type="number" value="${p?.unit_price || ''}">
+      </div>
+      <div class="form-group">
+        <label>재고수량</label>
+        <input class="form-control" id="fi-stock" type="number" value="${p?.stock_qty || 0}">
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
+     <button class="btn btn-primary" onclick="saveItem(${isEdit ? `'${p.id}'` : 'null'})">
+       ${isEdit ? '수정 저장' : '등록'}
+     </button>`
+  );
+}
+
+async function saveItem(id) {
+  const data = {
+    item_code:  document.getElementById('fi-code').value,
+    item_name:  document.getElementById('fi-name').value,
+    category:   document.getElementById('fi-cat').value,
+    unit:       document.getElementById('fi-unit').value,
+    unit_price: document.getElementById('fi-price').value,
+    stock_qty:  document.getElementById('fi-stock').value,
+  };
+  if (!data.item_name) { toast('품목명은 필수입니다', 'error'); return; }
+  const r = id
+    ? await apiPost({ action: 'update', sheet: 'items', id, data })
+    : await apiPost({ action: 'insert', sheet: 'items', data });
+  if (r.success) { toast(id ? '수정되었습니다' : '등록되었습니다'); closeModal(); renderItems(); }
+  else toast(r.error || '오류 발생', 'error');
+}
+
+async function deleteItem(id, name) {
+  if (!confirm(`"${name}"을 삭제하시겠습니까?`)) return;
+  const r = await apiPost({ action: 'delete', sheet: 'items', id });
+  if (r.success) { toast('삭제되었습니다'); renderItems(); }
+  else toast(r.error || '오류 발생', 'error');
+}
+
+// ═══════════════════════════════════════════════════
+//  입출고 등록
+// ═══════════════════════════════════════════════════
+async function renderTransactions() {
+  document.getElementById('topbar-actions').innerHTML =
+    `<button class="btn btn-primary" onclick="openTransactionModal()">+ 입출고 등록</button>`;
+  const r = await apiGet({ action: 'getAll', sheet: 'transactions' });
+  const data = (r.data || []).reverse();
+
+  const rows = data.length ? data.map(t => `<tr>
+    <td>${fmtDate(t.date)}</td>
+    <td>${typeBadge(t.type)}</td>
+    <td style="font-weight:500">${t.product_name || '-'}</td>
+    <td style="font-size:11px;color:var(--text3)">${t.product_code || '-'}</td>
+    <td class="amount-neu">${fmtN(t.qty)}</td>
+    <td>${fmt(t.unit_price)}</td>
+    <td class="${t.type === '입고' ? 'amount-pos' : 'amount-neg'}">${fmt(t.total)}</td>
+    <td style="font-size:12px;color:var(--text2)">${t.note || ''}</td>
+    <td>
+      <button class="btn btn-danger btn-sm" onclick="deleteTx('${t.id}')">삭제</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="9" class="loading">입출고 내역이 없습니다</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="filter-bar">
+      <div class="search-box"><span class="search-icon">🔍</span>
+        <input type="text" placeholder="상품명 검색..." oninput="filterTx(this.value, null)">
+      </div>
+      <select class="filter-select" onchange="filterTx(null, this.value)">
+        <option value="">전체 구분</option>
+        <option>입고</option><option>출고</option><option>서비스</option>
+        <option>파손</option><option>샘플</option>
+      </select>
+      <input type="date" class="filter-date" onchange="filterTxDate(this.value,'from')">
+      <span style="color:var(--text3);font-size:13px">~</span>
+      <input type="date" class="filter-date" onchange="filterTxDate(this.value,'to')">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>구분</th><th>상품명</th><th>코드</th><th>수량</th><th>단가</th><th>총액</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody id="tx-body">${rows}</tbody>
+      </table>
+    </div>`;
+  window._txData = data;
+  window._txFilters = { q: '', type: '', from: '', to: '' };
+}
+
+function applyTxFilters() {
+  const f = window._txFilters;
+  let d = window._txData || [];
+  if (f.q) d = d.filter(t => (t.product_name || '').includes(f.q));
+  if (f.type) d = d.filter(t => t.type === f.type);
+  if (f.from) d = d.filter(t => fmtDate(t.date) >= f.from);
+  if (f.to)   d = d.filter(t => fmtDate(t.date) <= f.to);
+  document.getElementById('tx-body').innerHTML = d.length
+    ? d.map(t => `<tr>
+        <td>${fmtDate(t.date)}</td><td>${typeBadge(t.type)}</td>
+        <td style="font-weight:500">${t.product_name || '-'}</td>
+        <td style="font-size:11px;color:var(--text3)">${t.product_code || '-'}</td>
+        <td class="amount-neu">${fmtN(t.qty)}</td><td>${fmt(t.unit_price)}</td>
+        <td class="${t.type === '입고' ? 'amount-pos' : 'amount-neg'}">${fmt(t.total)}</td>
+        <td style="font-size:12px;color:var(--text2)">${t.note || ''}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteTx('${t.id}')">삭제</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="9" class="loading">결과 없음</td></tr>';
+}
+function filterTx(q, type) {
+  if (q !== null) window._txFilters.q = q;
+  if (type !== null) window._txFilters.type = type;
+  applyTxFilters();
+}
+function filterTxDate(val, side) { window._txFilters[side] = val; applyTxFilters(); }
+
+async function openTransactionModal() {
+  const [pr, ir] = await Promise.all([
+    apiGet({ action: 'getAll', sheet: 'products' }),
+    apiGet({ action: 'getAll', sheet: 'items' })
+  ]);
+  const products = pr.data || [];
+  const items    = ir.data || [];
+
+  const prodItems = products.map(p =>
+    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','product','${p.product_name}','${p.product_code || ''}','${p.unit_price || 0}')">
+      <span>${p.product_name}</span>
+      <span class="code">${p.product_code || ''} | ${fmt(p.unit_price)}</span>
+    </div>`).join('');
+  const itemItems = items.map(p =>
+    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','item','${p.item_name}','${p.item_code || ''}','${p.unit_price || 0}')">
+      <span>${p.item_name}</span>
+      <span class="code">${p.item_code || ''} | ${fmt(p.unit_price)}</span>
+    </div>`).join('');
+
+  openModal('입출고 등록', `
+    <div class="form-grid">
+      <div class="form-group">
+        <label>날짜 *</label>
+        <input class="form-control" id="tx-date" type="date" value="${today()}">
+      </div>
+      <div class="form-group">
+        <label>구분 *</label>
+        <select class="form-control" id="tx-type">
+          <option>입고</option><option>출고</option><option>서비스</option>
+          <option>파손</option><option>샘플</option>
+        </select>
+      </div>
+      <div class="form-group span2">
+        <label>상품/품목 선택 (클릭하여 선택)</label>
+        <div class="tab-bar" style="margin-bottom:8px">
+          <div class="tab active" onclick="switchTxTab(this,'prod')">상품</div>
+          <div class="tab" onclick="switchTxTab(this,'item')">비상품</div>
+        </div>
+        <div id="tx-prod-list" class="product-picker">${prodItems || '<div style="padding:12px;color:var(--text3);font-size:13px">등록된 상품 없음</div>'}</div>
+        <div id="tx-item-list" class="product-picker" style="display:none">${itemItems || '<div style="padding:12px;color:var(--text3);font-size:13px">등록된 비상품 없음</div>'}</div>
+      </div>
+      <div class="form-group">
+        <label>선택된 상품명</label>
+        <input class="form-control" id="tx-name" readonly placeholder="위에서 선택하세요" style="background:var(--bg)">
+      </div>
+      <div class="form-group">
+        <label>상품코드</label>
+        <input class="form-control" id="tx-code" readonly style="background:var(--bg)">
+      </div>
+      <div class="form-group">
+        <label>단가 (원)</label>
+        <input class="form-control" id="tx-price" type="number" placeholder="0" oninput="calcTxTotal()">
+      </div>
+      <div class="form-group">
+        <label>수량 *</label>
+        <input class="form-control" id="tx-qty" type="number" placeholder="0" oninput="calcTxTotal()">
+      </div>
+      <div class="form-group">
+        <label>총액</label>
+        <input class="form-control" id="tx-total" readonly style="background:var(--bg);color:var(--accent);font-weight:700">
+      </div>
+      <div class="form-group">
+        <label>비고</label>
+        <input class="form-control" id="tx-note" placeholder="메모">
+      </div>
+    </div>
+    <input type="hidden" id="tx-ref-id"><input type="hidden" id="tx-ref-type">`,
+    `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
+     <button class="btn btn-primary" onclick="saveTx()">등록</button>`
+  );
+}
+
+function switchTxTab(el, tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tx-prod-list').style.display = tab === 'prod' ? '' : 'none';
+  document.getElementById('tx-item-list').style.display = tab === 'item' ? '' : 'none';
+}
+
+function selectTxProduct(el, id, type, name, code, price) {
+  document.querySelectorAll('.product-picker-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('tx-ref-id').value   = id;
+  document.getElementById('tx-ref-type').value = type;
+  document.getElementById('tx-name').value  = name;
+  document.getElementById('tx-code').value  = code;
+  document.getElementById('tx-price').value = price;
+  calcTxTotal();
+}
+
+function calcTxTotal() {
+  const p = Number(document.getElementById('tx-price').value) || 0;
+  const q = Number(document.getElementById('tx-qty').value)   || 0;
+  document.getElementById('tx-total').value = (p * q).toLocaleString('ko-KR') + '원';
+}
+
+async function saveTx() {
+  const data = {
+    date:       document.getElementById('tx-date').value,
+    type:       document.getElementById('tx-type').value,
+    ref_id:     document.getElementById('tx-ref-id').value,
+    ref_type:   document.getElementById('tx-ref-type').value,
+    product_name: document.getElementById('tx-name').value,
+    product_code: document.getElementById('tx-code').value,
+    unit_price:  document.getElementById('tx-price').value,
+    qty:         document.getElementById('tx-qty').value,
+    total:       (Number(document.getElementById('tx-price').value) * Number(document.getElementById('tx-qty').value)),
+    note:        document.getElementById('tx-note').value,
+  };
+  if (!data.date || !data.qty) { toast('날짜와 수량은 필수입니다', 'error'); return; }
+
+  // 매출/매입 시트에도 자동 반영
+  const r = await apiPost({ action: 'insert', sheet: 'transactions', data });
+  if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
+
+  // 출고/서비스/파손/샘플 → sales 시트에도 기록
+  if (['출고','서비스','파손','샘플'].includes(data.type)) {
+    await apiPost({ action: 'insert', sheet: 'sales', data: {
+      date: data.date, type: data.type,
+      product_name: data.product_name, product_code: data.product_code,
+      unit_price: data.unit_price, qty: data.qty, total: data.total,
+      is_loss: data.type !== '출고',
+      note: data.note
+    }});
+  }
+  // 입고 → purchases 시트에도 기록
+  if (data.type === '입고') {
+    await apiPost({ action: 'insert', sheet: 'purchases', data: {
+      date: data.date, supplier: '',
+      product_name: data.product_name, product_code: data.product_code,
+      unit_price: data.unit_price, qty: data.qty, total: data.total,
+      note: data.note
+    }});
+  }
+
+  toast('입출고 등록 완료'); closeModal(); renderTransactions();
+}
+
+async function deleteTx(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  const r = await apiPost({ action: 'delete', sheet: 'transactions', id });
+  if (r.success) { toast('삭제되었습니다'); renderTransactions(); }
+  else toast(r.error || '오류 발생', 'error');
+}
+
+// ═══════════════════════════════════════════════════
+//  매입 관리
+// ═══════════════════════════════════════════════════
+async function renderPurchases() {
+  const r = await apiGet({ action: 'getAll', sheet: 'purchases' });
+  const data = (r.data || []).reverse();
+  const total = data.reduce((s, d) => s + (Number(d.total) || 0), 0);
+
+  const rows = data.length ? data.map(p => `<tr>
+    <td>${fmtDate(p.date)}</td>
+    <td style="font-size:12px;color:var(--text2)">${p.supplier || '-'}</td>
+    <td style="font-weight:500">${p.product_name || '-'}</td>
+    <td style="font-size:11px;color:var(--text3)">${p.product_code || '-'}</td>
+    <td class="amount-neu">${fmtN(p.qty)}</td>
+    <td>${fmt(p.unit_price)}</td>
+    <td class="amount-pos">${fmt(p.total)}</td>
+    <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
+  </tr>`).join('') : '<tr><td colspan="8" class="loading">매입 내역이 없습니다</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+      <div class="stat-card red">
+        <div class="stat-label">전체 매입 합계</div>
+        <div class="stat-value red">${fmtN(total)}</div>
+        <div class="stat-sub">원</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">매입 건수</div>
+        <div class="stat-value blue">${data.length}</div>
+        <div class="stat-sub">건</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="stat-label">이번 달 매입</div>
+        <div class="stat-value yellow">${fmtN(data.filter(d => fmtDate(d.date).slice(0,7) === today().slice(0,7)).reduce((s,d) => s+(Number(d.total)||0),0))}</div>
+        <div class="stat-sub">원</div>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="search-box"><span class="search-icon">🔍</span>
+        <input type="text" placeholder="상품명, 공급업체 검색..." oninput="filterPurchases(this.value)">
+      </div>
+      <select class="filter-select" onchange="filterPurchasesPeriod(this.value)">
+        <option value="">전체 기간</option>
+        <option value="month">이번 달</option>
+        <option value="year">올해</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>공급업체</th><th>상품명</th><th>코드</th><th>수량</th><th>단가</th><th>총액</th><th>비고</th></tr></thead>
+        <tbody id="purchase-body">${rows}</tbody>
+      </table>
+    </div>`;
+  window._purchaseData = data;
+}
+
+function filterPurchases(q) {
+  const d = (window._purchaseData || []).filter(p =>
+    (p.product_name || '').includes(q) || (p.supplier || '').includes(q)
+  );
+  renderPurchaseRows(d);
+}
+function filterPurchasesPeriod(val) {
+  let d = window._purchaseData || [];
+  if (val === 'month') d = d.filter(p => fmtDate(p.date).slice(0,7) === today().slice(0,7));
+  if (val === 'year')  d = d.filter(p => fmtDate(p.date).slice(0,4) === today().slice(0,4));
+  renderPurchaseRows(d);
+}
+function renderPurchaseRows(data) {
+  document.getElementById('purchase-body').innerHTML = data.length
+    ? data.map(p => `<tr>
+        <td>${fmtDate(p.date)}</td>
+        <td style="font-size:12px;color:var(--text2)">${p.supplier || '-'}</td>
+        <td style="font-weight:500">${p.product_name || '-'}</td>
+        <td style="font-size:11px;color:var(--text3)">${p.product_code || '-'}</td>
+        <td class="amount-neu">${fmtN(p.qty)}</td>
+        <td>${fmt(p.unit_price)}</td>
+        <td class="amount-pos">${fmt(p.total)}</td>
+        <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="8" class="loading">결과 없음</td></tr>';
+}
+
+// ═══════════════════════════════════════════════════
+//  매출 관리
+// ═══════════════════════════════════════════════════
+async function renderSales() {
+  const r = await apiGet({ action: 'getAll', sheet: 'sales' });
+  const data = (r.data || []).reverse();
+
+  const totalSales  = data.filter(d => !d.is_loss).reduce((s,d) => s+(Number(d.total)||0), 0);
+  const totalLoss   = data.filter(d => d.is_loss).reduce((s,d) => s+(Number(d.total)||0), 0);
+  const net         = totalSales - totalLoss;
+
+  const rows = data.length ? data.map(s => {
+    const isLoss = s.is_loss === true || s.is_loss === 'TRUE';
+    return `<tr>
+      <td>${fmtDate(s.date)}</td>
+      <td>${typeBadge(s.type)}</td>
+      <td style="font-weight:500">${s.product_name || '-'}</td>
+      <td style="font-size:11px;color:var(--text3)">${s.product_code || '-'}</td>
+      <td class="amount-neu">${fmtN(s.qty)}</td>
+      <td>${fmt(s.unit_price)}</td>
+      <td class="${isLoss ? 'amount-neg' : 'amount-pos'}">${isLoss ? '-' : ''}${fmt(s.total)}</td>
+      <td>${isLoss ? '<span class="badge badge-yellow">손실</span>' : '<span class="badge badge-green">매출</span>'}</td>
+      <td style="font-size:12px;color:var(--text2)">${s.note || ''}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="loading">매출 내역이 없습니다</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="stat-grid" style="margin-bottom:20px">
+      <div class="stat-card green">
+        <div class="stat-label">전체 매출 합계</div>
+        <div class="stat-value green">${fmtN(totalSales)}</div>
+        <div class="stat-sub">원</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">손실 합계</div>
+        <div class="stat-value red">${fmtN(totalLoss)}</div>
+        <div class="stat-sub">서비스+파손+샘플</div>
+      </div>
+      <div class="stat-card ${net >= 0 ? 'green' : 'red'}">
+        <div class="stat-label">순 매출 (손실 제외)</div>
+        <div class="stat-value ${net >= 0 ? 'green' : 'red'}">${fmtN(net)}</div>
+        <div class="stat-sub">원</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">매출 건수</div>
+        <div class="stat-value blue">${data.length}</div>
+        <div class="stat-sub">건</div>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="search-box"><span class="search-icon">🔍</span>
+        <input type="text" placeholder="상품명, 코드 검색..." oninput="filterSales(this.value)">
+      </div>
+      <select class="filter-select" onchange="filterSalesType(this.value)">
+        <option value="">전체 구분</option>
+        <option>출고</option><option>서비스</option><option>파손</option><option>샘플</option>
+      </select>
+      <select class="filter-select" onchange="filterSalesPeriod(this.value)">
+        <option value="">전체 기간</option>
+        <option value="month">이번 달</option>
+        <option value="year">올해</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>구분</th><th>상품명</th><th>코드</th><th>수량</th><th>단가</th><th>금액</th><th>유형</th><th>비고</th></tr></thead>
+        <tbody id="sales-body">${rows}</tbody>
+      </table>
+    </div>`;
+  window._salesData = data;
+  window._salesFilters = { q: '', type: '', period: '' };
+}
+
+function applySalesFilters() {
+  const f = window._salesFilters;
+  let d = window._salesData || [];
+  if (f.q)    d = d.filter(s => (s.product_name||'').includes(f.q)||(s.product_code||'').includes(f.q));
+  if (f.type) d = d.filter(s => s.type === f.type);
+  if (f.period === 'month') d = d.filter(s => fmtDate(s.date).slice(0,7) === today().slice(0,7));
+  if (f.period === 'year')  d = d.filter(s => fmtDate(s.date).slice(0,4) === today().slice(0,4));
+  document.getElementById('sales-body').innerHTML = d.length
+    ? d.map(s => {
+        const isLoss = s.is_loss === true || s.is_loss === 'TRUE';
+        return `<tr>
+          <td>${fmtDate(s.date)}</td><td>${typeBadge(s.type)}</td>
+          <td style="font-weight:500">${s.product_name||'-'}</td>
+          <td style="font-size:11px;color:var(--text3)">${s.product_code||'-'}</td>
+          <td class="amount-neu">${fmtN(s.qty)}</td><td>${fmt(s.unit_price)}</td>
+          <td class="${isLoss?'amount-neg':'amount-pos'}">${isLoss?'-':''}${fmt(s.total)}</td>
+          <td>${isLoss?'<span class="badge badge-yellow">손실</span>':'<span class="badge badge-green">매출</span>'}</td>
+          <td style="font-size:12px;color:var(--text2)">${s.note||''}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="9" class="loading">결과 없음</td></tr>';
+}
+function filterSales(q)      { window._salesFilters.q    = q;   applySalesFilters(); }
+function filterSalesType(v)  { window._salesFilters.type = v;   applySalesFilters(); }
+function filterSalesPeriod(v){ window._salesFilters.period = v; applySalesFilters(); }
+
+// ═══════════════════════════════════════════════════
+//  수정 로그
+// ═══════════════════════════════════════════════════
+async function renderAudit() {
+  const r = await apiGet({ action: 'getAll', sheet: 'audit_log' });
+  const data = (r.data || []).reverse().slice(0, 100);
+  const actionBadge = a => ({ INSERT: 'badge-green', UPDATE: 'badge-blue', DELETE: 'badge-red' }[a] || 'badge-gray');
+  const rows = data.length ? data.map(l => `<tr>
+    <td style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${String(l.timestamp||'').slice(0,19).replace('T',' ')}</td>
+    <td><span class="badge ${actionBadge(l.action)}">${l.action}</span></td>
+    <td style="font-size:12px">${l.sheet || '-'}</td>
+    <td style="font-size:11px;color:var(--text2)">${l.changed_by || '-'}</td>
+  </tr>`).join('') : '<tr><td colspan="4" class="loading">로그 없음</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">최근 100건 표시</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>시간</th><th>작업</th><th>시트</th><th>작업자</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  페이지 라우터
+// ═══════════════════════════════════════════════════
+const pages = {
+  dashboard:    renderDashboard,
+  products:     renderProducts,
+  items:        renderItems,
+  transactions: renderTransactions,
+  purchases:    renderPurchases,
+  sales:        renderSales,
+  audit:        renderAudit,
+};
+
+// ─── 초기 실행 ───────────────────────────────────────
+navigate('dashboard');
+</script>
+</body>
+</html>
