@@ -158,6 +158,15 @@
   .tab { padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text2); transition: all 0.15s; }
   .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
+  /* ── 스켈레톤 로딩 ── */
+  .skel {
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    display: inline-block; width: 100%;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
   /* ── 로딩 / 빈 상태 ── */
   .loading { text-align: center; padding: 40px; color: var(--text3); font-size: 14px; }
   .empty { text-align: center; padding: 50px 20px; color: var(--text3); }
@@ -279,6 +288,7 @@
   <div class="topbar">
     <h2 id="page-title">대시보드</h2>
     <div class="topbar-actions" id="topbar-actions"></div>
+    <button class="btn btn-ghost btn-sm" onclick="refreshPage()" title="최신 데이터로 갱신" style="margin-left:4px">🔄 갱신</button>
   </div>
   <div class="content" id="content">
     <div class="loading">불러오는 중...</div>
@@ -308,13 +318,42 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbymJQZYib6C8CsZpL4eqllM
 const API_KEY = 'rio214-secret-key-2026';
 
 // ═══════════════════════════════════════════════════
+//  캐시 시스템 (60초 유효)
+// ═══════════════════════════════════════════════════
+const _cache = {};
+const CACHE_TTL = 60 * 1000; // 60초
+
+function cacheKey(params) { return JSON.stringify(params); }
+
+function getCache(key) {
+  const c = _cache[key];
+  if (!c) return null;
+  if (Date.now() - c.ts > CACHE_TTL) { delete _cache[key]; return null; }
+  return c.data;
+}
+
+function setCache(key, data) { _cache[key] = { data, ts: Date.now() }; }
+
+function invalidateCache(sheet) {
+  // 해당 시트 관련 캐시 전부 삭제
+  Object.keys(_cache).forEach(k => { if (k.includes(sheet) || k.includes('summary')) delete _cache[k]; });
+}
+
+// ═══════════════════════════════════════════════════
 //  API 헬퍼
 // ═══════════════════════════════════════════════════
-async function apiGet(params) {
+async function apiGet(params, useCache = true) {
+  const key = cacheKey(params);
+  if (useCache) {
+    const cached = getCache(key);
+    if (cached) return cached;
+  }
   params.key = API_KEY;
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${API_URL}?${qs}`);
-  return res.json();
+  const data = await res.json();
+  if (data.success) setCache(key, data);
+  return data;
 }
 
 async function apiPost(body) {
@@ -324,7 +363,43 @@ async function apiPost(body) {
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'text/plain' }
   });
-  return res.json();
+  const data = await res.json();
+  // 쓰기 후 관련 캐시 무효화
+  if (body.sheet) invalidateCache(body.sheet);
+  return data;
+}
+
+// ═══════════════════════════════════════════════════
+//  스켈레톤 로딩 UI
+// ═══════════════════════════════════════════════════
+function skeletonRows(cols, rows = 5) {
+  return Array(rows).fill(0).map(() =>
+    `<tr>${Array(cols).fill(0).map(() =>
+      `<td><div class="skel" style="width:${60+Math.random()*30}%;height:14px;border-radius:4px"></div></td>`
+    ).join('')}</tr>`
+  ).join('');
+}
+
+function skeletonStats(count = 4) {
+  return `<div class="stat-grid" style="margin-bottom:24px">${
+    Array(count).fill(0).map(() =>
+      `<div class="stat-card blue" style="opacity:0.5">
+        <div class="skel" style="width:60%;height:12px;border-radius:4px;margin-bottom:12px"></div>
+        <div class="skel" style="width:40%;height:28px;border-radius:4px"></div>
+      </div>`
+    ).join('')
+  }</div>`;
+}
+
+function skeletonTable(cols, rows = 5, title = '') {
+  return `
+    ${title ? `<div class="filter-bar"><div class="search-box"><span class="search-icon">🔍</span><input class="form-control" placeholder="검색..." disabled></div></div>` : ''}
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${Array(cols).fill(0).map(() => `<th><div class="skel" style="width:70%;height:12px;border-radius:4px"></div></th>`).join('')}</tr></thead>
+        <tbody>${skeletonRows(cols, rows)}</tbody>
+      </table>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════════════
@@ -360,6 +435,13 @@ function typeBadge(type) {
   return `<span class="badge ${map[type] || 'badge-gray'}">${type}</span>`;
 }
 
+function refreshPage() {
+  // 전체 캐시 초기화 후 현재 페이지 강제 새로고침
+  Object.keys(_cache).forEach(k => delete _cache[k]);
+  navigate(currentPage);
+  toast('최신 데이터로 갱신했습니다');
+}
+
 // ═══════════════════════════════════════════════════
 //  네비게이션
 // ═══════════════════════════════════════════════════
@@ -377,7 +459,18 @@ function navigate(page) {
   });
   document.getElementById('page-title').textContent = pageTitles[page];
   document.getElementById('topbar-actions').innerHTML = '';
-  document.getElementById('content').innerHTML = '<div class="loading">불러오는 중...</div>';
+
+  // 페이지별 스켈레톤 표시
+  const skeletons = {
+    dashboard:    skeletonStats(4) + skeletonTable(5, 5),
+    products:     skeletonTable(7, 6, true),
+    items:        skeletonTable(6, 5, true),
+    transactions: skeletonTable(9, 7, true),
+    purchases:    skeletonStats(3) + skeletonTable(8, 6),
+    sales:        skeletonStats(4) + skeletonTable(9, 6),
+    audit:        skeletonTable(4, 8),
+  };
+  document.getElementById('content').innerHTML = skeletons[page] || '<div class="loading">불러오는 중...</div>';
   pages[page]();
 }
 
