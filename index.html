@@ -568,12 +568,13 @@ async function renderProducts() {
       <td style="${lowClass}">${fmtN(p.stock_qty)} ${p.unit || ''} ${lowClass ? '⚠️' : ''}</td>
       <td>${fmt(p.unit_price)}</td>
       <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
+      <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
       <td>
         <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
       </td>
     </tr>`;
-  }).join('') : '<tr><td colspan="7" class="loading">등록된 상품이 없습니다</td></tr>';
+  }).join('') : '<tr><td colspan="8" class="loading">등록된 상품이 없습니다</td></tr>';
 
   document.getElementById('content').innerHTML = `
     <div class="filter-bar">
@@ -583,7 +584,7 @@ async function renderProducts() {
     </div>
     <div class="table-wrap" id="products-table">
       <table>
-        <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>최소재고</th><th>관리</th></tr></thead>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>최소재고</th><th>비고</th><th>관리</th></tr></thead>
         <tbody id="products-body">${rows}</tbody>
       </table>
     </div>`;
@@ -642,6 +643,10 @@ function openProductModal(p = null) {
         <label>최소 재고 (경고 기준)</label>
         <input class="form-control" id="f-min" type="number" value="${p?.min_stock || ''}" placeholder="0">
       </div>
+      <div class="form-group span2">
+        <label>비고</label>
+        <input class="form-control" id="f-note" value="${p?.note || ''}" placeholder="상품 관련 메모">
+      </div>
     </div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
      <button class="btn btn-primary" onclick="saveProduct(${isEdit ? `'${p.id}'` : 'null'})">
@@ -659,6 +664,7 @@ async function saveProduct(id) {
     unit_price:   document.getElementById('f-price').value,
     stock_qty:    document.getElementById('f-stock').value,
     min_stock:    document.getElementById('f-min').value,
+    note:         document.getElementById('f-note').value,
   };
   if (!data.product_name) { toast('상품명은 필수입니다', 'error'); return; }
   const r = id
@@ -689,11 +695,12 @@ async function renderItems() {
     <td>${p.category || '-'}</td>
     <td>${fmtN(p.stock_qty)} ${p.unit || ''}</td>
     <td>${fmt(p.unit_price)}</td>
+    <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
     <td>
       <button class="btn btn-ghost btn-sm" onclick='openItemModal(${JSON.stringify(p)})'>수정</button>
       <button class="btn btn-danger btn-sm" onclick="deleteItem('${p.id}','${p.item_name}')">삭제</button>
     </td>
-  </tr>`).join('') : '<tr><td colspan="6" class="loading">등록된 비상품이 없습니다</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="7" class="loading">등록된 비상품이 없습니다</td></tr>';
 
   document.getElementById('content').innerHTML = `
     <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">
@@ -701,7 +708,7 @@ async function renderItems() {
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>코드</th><th>품목명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>관리</th></tr></thead>
+        <thead><tr><th>코드</th><th>품목명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>비고</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -735,6 +742,10 @@ function openItemModal(p = null) {
         <label>재고수량</label>
         <input class="form-control" id="fi-stock" type="number" value="${p?.stock_qty || 0}">
       </div>
+      <div class="form-group span2">
+        <label>비고</label>
+        <input class="form-control" id="fi-note" value="${p?.note || ''}" placeholder="품목 관련 메모">
+      </div>
     </div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
      <button class="btn btn-primary" onclick="saveItem(${isEdit ? `'${p.id}'` : 'null'})">
@@ -751,6 +762,7 @@ async function saveItem(id) {
     unit:       document.getElementById('fi-unit').value,
     unit_price: document.getElementById('fi-price').value,
     stock_qty:  document.getElementById('fi-stock').value,
+    note:       document.getElementById('fi-note').value,
   };
   if (!data.item_name) { toast('품목명은 필수입니다', 'error'); return; }
   const r = id
