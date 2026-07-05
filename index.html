@@ -566,7 +566,8 @@ async function renderProducts() {
       <td style="font-weight:500">${p.product_name}</td>
       <td>${p.category || '-'}</td>
       <td style="${lowClass}">${fmtN(p.stock_qty)} ${p.unit || ''} ${lowClass ? '⚠️' : ''}</td>
-      <td>${fmt(p.unit_price)}</td>
+      <td style="color:var(--red)">${fmt(p.purchase_price)}</td>
+      <td style="color:var(--green)">${fmt(p.sale_price)}</td>
       <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
       <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
       <td>
@@ -584,7 +585,7 @@ async function renderProducts() {
     </div>
     <div class="table-wrap" id="products-table">
       <table>
-        <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>최소재고</th><th>비고</th><th>관리</th></tr></thead>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>매입단가</th><th>매출단가</th><th>최소재고</th><th>비고</th><th>관리</th></tr></thead>
         <tbody id="products-body">${rows}</tbody>
       </table>
     </div>`;
@@ -632,8 +633,12 @@ function openProductModal(p = null) {
         <input class="form-control" id="f-unit" value="${p?.unit || ''}" placeholder="예: 개, box, kg">
       </div>
       <div class="form-group">
-        <label>단가 (원)</label>
-        <input class="form-control" id="f-price" type="number" value="${p?.unit_price || ''}" placeholder="0">
+        <label>매입단가 (원) — 입고 시 적용</label>
+        <input class="form-control" id="f-purchase-price" type="number" value="${p?.purchase_price || ''}" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>매출단가 (원) — 출고 시 적용</label>
+        <input class="form-control" id="f-sale-price" type="number" value="${p?.sale_price || ''}" placeholder="0">
       </div>
       <div class="form-group">
         <label>현재 재고수량</label>
@@ -661,7 +666,9 @@ async function saveProduct(id) {
     product_name: document.getElementById('f-name').value,
     category:     document.getElementById('f-category').value,
     unit:         document.getElementById('f-unit').value,
-    unit_price:   document.getElementById('f-price').value,
+    unit_price:      document.getElementById('f-purchase-price').value, // 하위호환 유지
+    purchase_price:  document.getElementById('f-purchase-price').value,
+    sale_price:      document.getElementById('f-sale-price').value,
     stock_qty:    document.getElementById('f-stock').value,
     min_stock:    document.getElementById('f-min').value,
     note:         document.getElementById('f-note').value,
@@ -694,7 +701,8 @@ async function renderItems() {
     <td style="font-weight:500">${p.item_name}</td>
     <td>${p.category || '-'}</td>
     <td>${fmtN(p.stock_qty)} ${p.unit || ''}</td>
-    <td>${fmt(p.unit_price)}</td>
+    <td style="color:var(--red)">${fmt(p.purchase_price)}</td>
+    <td style="color:var(--green)">${fmt(p.sale_price)}</td>
     <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
     <td>
       <button class="btn btn-ghost btn-sm" onclick='openItemModal(${JSON.stringify(p)})'>수정</button>
@@ -708,7 +716,7 @@ async function renderItems() {
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>코드</th><th>품목명</th><th>카테고리</th><th>재고수량</th><th>단가</th><th>비고</th><th>관리</th></tr></thead>
+        <thead><tr><th>코드</th><th>품목명</th><th>카테고리</th><th>재고수량</th><th>매입단가</th><th>매출단가</th><th>비고</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -735,8 +743,12 @@ function openItemModal(p = null) {
         <input class="form-control" id="fi-unit" value="${p?.unit || ''}" placeholder="개, 롤, 묶음">
       </div>
       <div class="form-group">
-        <label>단가 (원)</label>
-        <input class="form-control" id="fi-price" type="number" value="${p?.unit_price || ''}">
+        <label>매입단가 (원) — 입고 시 적용</label>
+        <input class="form-control" id="fi-purchase-price" type="number" value="${p?.purchase_price || ''}">
+      </div>
+      <div class="form-group">
+        <label>매출단가 (원) — 출고 시 적용</label>
+        <input class="form-control" id="fi-sale-price" type="number" value="${p?.sale_price || ''}">
       </div>
       <div class="form-group">
         <label>재고수량</label>
@@ -760,7 +772,9 @@ async function saveItem(id) {
     item_name:  document.getElementById('fi-name').value,
     category:   document.getElementById('fi-cat').value,
     unit:       document.getElementById('fi-unit').value,
-    unit_price: document.getElementById('fi-price').value,
+    unit_price:       document.getElementById('fi-purchase-price').value, // 하위호환
+    purchase_price:   document.getElementById('fi-purchase-price').value,
+    sale_price:       document.getElementById('fi-sale-price').value,
     stock_qty:  document.getElementById('fi-stock').value,
     note:       document.getElementById('fi-note').value,
   };
@@ -861,14 +875,14 @@ async function openTransactionModal() {
   const items    = ir.data || [];
 
   const prodItems = products.map(p =>
-    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','product','${p.product_name}','${p.product_code || ''}','${p.unit_price || 0}')">
+    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','product','${p.product_name}','${p.product_code || ''}','${p.purchase_price || 0}','${p.sale_price || 0}')">
       <span>${p.product_name}</span>
-      <span class="code">${p.product_code || ''} | ${fmt(p.unit_price)}</span>
+      <span class="code">${p.product_code || ''} | 매입 ${fmt(p.purchase_price)} / 매출 ${fmt(p.sale_price)}</span>
     </div>`).join('');
   const itemItems = items.map(p =>
-    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','item','${p.item_name}','${p.item_code || ''}','${p.unit_price || 0}')">
+    `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','item','${p.item_name}','${p.item_code || ''}','${p.purchase_price || 0}','${p.sale_price || 0}')">
       <span>${p.item_name}</span>
-      <span class="code">${p.item_code || ''} | ${fmt(p.unit_price)}</span>
+      <span class="code">${p.item_code || ''} | 매입 ${fmt(p.purchase_price)} / 매출 ${fmt(p.sale_price)}</span>
     </div>`).join('');
 
   openModal('입출고 등록', `
@@ -879,7 +893,7 @@ async function openTransactionModal() {
       </div>
       <div class="form-group">
         <label>구분 *</label>
-        <select class="form-control" id="tx-type">
+        <select class="form-control" id="tx-type" onchange="onTxTypeChange()">
           <option>입고</option><option>출고</option><option>서비스</option>
           <option>파손</option><option>샘플</option>
         </select>
@@ -902,7 +916,7 @@ async function openTransactionModal() {
         <input class="form-control" id="tx-code" readonly style="background:var(--bg)">
       </div>
       <div class="form-group">
-        <label>단가 (원)</label>
+        <label id="tx-price-label">단가 (원)</label>
         <input class="form-control" id="tx-price" type="number" placeholder="0" oninput="calcTxTotal()">
       </div>
       <div class="form-group">
@@ -918,7 +932,10 @@ async function openTransactionModal() {
         <input class="form-control" id="tx-note" placeholder="메모">
       </div>
     </div>
-    <input type="hidden" id="tx-ref-id"><input type="hidden" id="tx-ref-type">`,
+    <input type="hidden" id="tx-ref-id">
+    <input type="hidden" id="tx-ref-type">
+    <input type="hidden" id="tx-purchase-price">
+    <input type="hidden" id="tx-sale-price">`,
     `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
      <button class="btn btn-primary" onclick="saveTx()">등록</button>`
   );
@@ -931,14 +948,30 @@ function switchTxTab(el, tab) {
   document.getElementById('tx-item-list').style.display = tab === 'item' ? '' : 'none';
 }
 
-function selectTxProduct(el, id, type, name, code, price) {
+function selectTxProduct(el, id, type, name, code, purchasePrice, salePrice) {
   document.querySelectorAll('.product-picker-item').forEach(e => e.classList.remove('selected'));
   el.classList.add('selected');
-  document.getElementById('tx-ref-id').value   = id;
-  document.getElementById('tx-ref-type').value = type;
-  document.getElementById('tx-name').value  = name;
-  document.getElementById('tx-code').value  = code;
+  document.getElementById('tx-ref-id').value    = id;
+  document.getElementById('tx-ref-type').value  = type;
+  document.getElementById('tx-name').value       = name;
+  document.getElementById('tx-code').value       = code;
+  // 매입/매출단가 hidden에 저장
+  document.getElementById('tx-purchase-price').value = purchasePrice;
+  document.getElementById('tx-sale-price').value     = salePrice;
+  // 현재 구분에 맞는 단가 자동 적용
+  onTxTypeChange();
+}
+
+function onTxTypeChange() {
+  const type          = document.getElementById('tx-type').value;
+  const purchasePrice = document.getElementById('tx-purchase-price').value;
+  const salePrice     = document.getElementById('tx-sale-price').value;
+  if (!purchasePrice && !salePrice) return; // 상품 미선택 시 무시
+  const price = (type === '입고') ? purchasePrice : salePrice;
   document.getElementById('tx-price').value = price;
+  // 단가 라벨 색상 힌트
+  const label = document.getElementById('tx-price-label');
+  if (label) label.textContent = type === '입고' ? '매입단가 (원)' : '매출단가 (원)';
   calcTxTotal();
 }
 
