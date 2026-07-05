@@ -334,9 +334,9 @@ function getCache(key) {
 
 function setCache(key, data) { _cache[key] = { data, ts: Date.now() }; }
 
-function invalidateCache(sheet) {
-  // 해당 시트 관련 캐시 전부 삭제
-  Object.keys(_cache).forEach(k => { if (k.includes(sheet) || k.includes('summary')) delete _cache[k]; });
+function invalidateCache() {
+  // 쓰기 작업 후 전체 캐시 초기화 (대시보드 포함 모든 페이지 최신화)
+  Object.keys(_cache).forEach(k => delete _cache[k]);
 }
 
 // ═══════════════════════════════════════════════════
@@ -364,8 +364,8 @@ async function apiPost(body) {
     headers: { 'Content-Type': 'text/plain' }
   });
   const data = await res.json();
-  // 쓰기 후 관련 캐시 무효화
-  if (body.sheet) invalidateCache(body.sheet);
+  // 쓰기 후 전체 캐시 무효화 (대시보드까지 최신화)
+  invalidateCache();
   return data;
 }
 
@@ -979,10 +979,42 @@ async function saveTx() {
 }
 
 async function deleteTx(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
+  if (!confirm('삭제하시겠습니까?\n입출고 내역과 함께 매입/매출 내역도 같이 삭제됩니다.')) return;
+
+  // 1) 삭제할 항목 정보 먼저 가져오기
+  const txRes = await apiGet({ action: 'getById', sheet: 'transactions', id }, false);
+  const tx = txRes.data;
+
+  // 2) transactions 삭제
   const r = await apiPost({ action: 'delete', sheet: 'transactions', id });
-  if (r.success) { toast('삭제되었습니다'); renderTransactions(); }
-  else toast(r.error || '오류 발생', 'error');
+  if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
+
+  // 3) 매입/매출 연동 삭제 (날짜 + 상품명 + 수량이 일치하는 항목)
+  if (tx) {
+    if (tx.type === '입고') {
+      // purchases에서 같은 항목 찾아서 삭제
+      const pRes = await apiGet({ action: 'getAll', sheet: 'purchases' }, false);
+      const match = (pRes.data || []).find(p =>
+        fmtDate(p.date) === fmtDate(tx.date) &&
+        p.product_name === tx.product_name &&
+        String(p.qty) === String(tx.qty)
+      );
+      if (match) await apiPost({ action: 'delete', sheet: 'purchases', id: match.id });
+    }
+    if (['출고','서비스','파손','샘플'].includes(tx.type)) {
+      // sales에서 같은 항목 찾아서 삭제
+      const sRes = await apiGet({ action: 'getAll', sheet: 'sales' }, false);
+      const match = (sRes.data || []).find(s =>
+        fmtDate(s.date) === fmtDate(tx.date) &&
+        s.product_name === tx.product_name &&
+        String(s.qty) === String(tx.qty)
+      );
+      if (match) await apiPost({ action: 'delete', sheet: 'sales', id: match.id });
+    }
+  }
+
+  toast('삭제되었습니다 (매입/매출 연동 삭제 완료)');
+  renderTransactions();
 }
 
 // ═══════════════════════════════════════════════════
