@@ -412,11 +412,29 @@ function fmt(n) {
 function fmtN(n) { return Number(n).toLocaleString('ko-KR'); }
 function fmtDate(d) {
   if (!d) return '-';
+  // 구글 시트 날짜 UTC 보정 (한국 UTC+9 기준)
+  if (d instanceof Date || (typeof d === 'number')) {
+    const date = new Date(d);
+    const offset = 9 * 60; // KST
+    const local = new Date(date.getTime() + offset * 60000);
+    return local.toISOString().split('T')[0];
+  }
   const s = String(d);
-  if (s.includes('T')) return s.split('T')[0];
+  if (s.includes('T')) {
+    // ISO 문자열도 UTC 보정
+    const date = new Date(s);
+    const offset = 9 * 60;
+    const local = new Date(date.getTime() + offset * 60000);
+    return local.toISOString().split('T')[0];
+  }
   return s.slice(0, 10);
 }
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() {
+  const now = new Date();
+  const offset = 9 * 60;
+  const local = new Date(now.getTime() + offset * 60000);
+  return local.toISOString().split('T')[0];
+}
 
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
@@ -798,7 +816,8 @@ async function deleteItem(id, name) {
 // ═══════════════════════════════════════════════════
 async function renderTransactions() {
   document.getElementById('topbar-actions').innerHTML =
-    `<button class="btn btn-primary" onclick="openTransactionModal()">+ 입출고 등록</button>`;
+    `<button class="btn btn-ghost" onclick="openBatchModal()">📋 일괄 등록</button>
+     <button class="btn btn-primary" onclick="openTransactionModal()">+ 입출고 등록</button>`;
   const r = await apiGet({ action: 'getAll', sheet: 'transactions' });
   const data = (r.data || []).reverse();
 
@@ -983,42 +1002,41 @@ function calcTxTotal() {
 
 async function saveTx() {
   const data = {
-    date:       document.getElementById('tx-date').value,
-    type:       document.getElementById('tx-type').value,
-    ref_id:     document.getElementById('tx-ref-id').value,
-    ref_type:   document.getElementById('tx-ref-type').value,
+    date:         document.getElementById('tx-date').value,
+    type:         document.getElementById('tx-type').value,
+    ref_id:       document.getElementById('tx-ref-id').value,
+    ref_type:     document.getElementById('tx-ref-type').value,
     product_name: document.getElementById('tx-name').value,
     product_code: document.getElementById('tx-code').value,
-    unit_price:  document.getElementById('tx-price').value,
-    qty:         document.getElementById('tx-qty').value,
-    total:       (Number(document.getElementById('tx-price').value) * Number(document.getElementById('tx-qty').value)),
-    note:        document.getElementById('tx-note').value,
+    unit_price:   document.getElementById('tx-price').value,
+    qty:          document.getElementById('tx-qty').value,
+    total:        (Number(document.getElementById('tx-price').value) * Number(document.getElementById('tx-qty').value)),
+    note:         document.getElementById('tx-note').value,
   };
   if (!data.date || !data.qty) { toast('날짜와 수량은 필수입니다', 'error'); return; }
 
-  // 매출/매입 시트에도 자동 반영
-  const r = await apiPost({ action: 'insert', sheet: 'transactions', data });
-  if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
+  // insertBatch로 한 번에 전송 (속도 개선)
+  const batchRows = [{ sheet: 'transactions', data }];
 
-  // 출고/서비스/파손/샘플 → sales 시트에도 기록
   if (['출고','서비스','파손','샘플'].includes(data.type)) {
-    await apiPost({ action: 'insert', sheet: 'sales', data: {
+    batchRows.push({ sheet: 'sales', data: {
       date: data.date, type: data.type,
       product_name: data.product_name, product_code: data.product_code,
       unit_price: data.unit_price, qty: data.qty, total: data.total,
-      is_loss: data.type !== '출고',
-      note: data.note
+      is_loss: data.type !== '출고', note: data.note
     }});
   }
-  // 입고 → purchases 시트에도 기록
   if (data.type === '입고') {
-    await apiPost({ action: 'insert', sheet: 'purchases', data: {
+    batchRows.push({ sheet: 'purchases', data: {
       date: data.date, supplier: '',
       product_name: data.product_name, product_code: data.product_code,
       unit_price: data.unit_price, qty: data.qty, total: data.total,
       note: data.note
     }});
   }
+
+  const r = await apiPost({ action: 'insertBatch', rows: batchRows });
+  if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
 
   toast('입출고 등록 완료'); closeModal(); renderTransactions();
 }
@@ -1059,6 +1077,193 @@ async function deleteTx(id) {
   }
 
   toast('삭제되었습니다 (매입/매출 연동 삭제 완료)');
+  renderTransactions();
+}
+
+// ═══════════════════════════════════════════════════
+//  일괄 등록 (여러 상품 한 번에)
+// ═══════════════════════════════════════════════════
+async function openBatchModal() {
+  const [pr, ir] = await Promise.all([
+    apiGet({ action: 'getAll', sheet: 'products' }),
+    apiGet({ action: 'getAll', sheet: 'items' })
+  ]);
+  const products = pr.data || [];
+  const items    = ir.data || [];
+  const allItems = [
+    ...products.map(p => ({ id: p.id, refType: 'product', name: p.product_name, code: p.product_code || '', purchasePrice: p.purchase_price || 0, salePrice: p.sale_price || 0 })),
+    ...items.map(p =>    ({ id: p.id, refType: 'item',    name: p.item_name,    code: p.item_code    || '', purchasePrice: p.purchase_price || 0, salePrice: p.sale_price || 0 }))
+  ];
+
+  const optionsHtml = allItems.map(p =>
+    `<option value="${p.id}" data-ref-type="${p.refType}" data-code="${p.code}" data-purchase="${p.purchasePrice}" data-sale="${p.salePrice}">${p.name} (${p.code || '-'})</option>`
+  ).join('');
+
+  // 초기 5행 테이블
+  const makeRow = (i) => `
+    <tr id="batch-row-${i}">
+      <td><input type="date" class="form-control" id="br-date-${i}" value="${today()}" style="min-width:130px"></td>
+      <td>
+        <select class="form-control" id="br-type-${i}" onchange="onBatchTypeChange(${i})" style="min-width:90px">
+          <option>입고</option><option>출고</option><option>서비스</option><option>파손</option><option>샘플</option>
+        </select>
+      </td>
+      <td>
+        <select class="form-control" id="br-product-${i}" onchange="onBatchProductChange(${i})" style="min-width:160px">
+          <option value="">— 선택 —</option>${optionsHtml}
+        </select>
+      </td>
+      <td><input class="form-control" id="br-price-${i}" type="number" placeholder="0" oninput="calcBatchTotal(${i})" style="min-width:90px"></td>
+      <td><input class="form-control" id="br-qty-${i}"   type="number" placeholder="0" oninput="calcBatchTotal(${i})" style="min-width:70px"></td>
+      <td><input class="form-control" id="br-total-${i}" readonly style="background:var(--bg);color:var(--accent);font-weight:700;min-width:100px"></td>
+      <td><input class="form-control" id="br-note-${i}" placeholder="메모" style="min-width:100px"></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeBatchRow(${i})">✕</button></td>
+    </tr>`;
+
+  window._batchRowCount = 5;
+  const initRows = Array.from({length: 5}, (_, i) => makeRow(i)).join('');
+
+  openModal('일괄 입출고 등록', `
+    <div style="overflow-x:auto;margin-bottom:12px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:8px;text-align:left;white-space:nowrap">날짜</th>
+            <th style="padding:8px;text-align:left">구분</th>
+            <th style="padding:8px;text-align:left">상품/품목</th>
+            <th style="padding:8px;text-align:left">단가</th>
+            <th style="padding:8px;text-align:left">수량</th>
+            <th style="padding:8px;text-align:left">총액</th>
+            <th style="padding:8px;text-align:left">비고</th>
+            <th style="padding:8px"></th>
+          </tr>
+        </thead>
+        <tbody id="batch-tbody">${initRows}</tbody>
+      </table>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="addBatchRow()">+ 행 추가</button>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">※ 상품 선택 시 구분(입고/출고)에 맞는 단가가 자동 입력됩니다</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">취소</button>
+     <button class="btn btn-success" onclick="saveBatch()">💾 일괄 저장</button>`
+  );
+
+  // 모달 너비 확장
+  document.querySelector('.modal').style.width = '860px';
+  window._batchOptions = optionsHtml;
+  window._batchAllItems = allItems;
+}
+
+function addBatchRow() {
+  const i = window._batchRowCount++;
+  const tbody = document.getElementById('batch-tbody');
+  const tr = document.createElement('tr');
+  tr.id = `batch-row-${i}`;
+  tr.innerHTML = `
+    <td><input type="date" class="form-control" id="br-date-${i}" value="${today()}" style="min-width:130px"></td>
+    <td>
+      <select class="form-control" id="br-type-${i}" onchange="onBatchTypeChange(${i})" style="min-width:90px">
+        <option>입고</option><option>출고</option><option>서비스</option><option>파손</option><option>샘플</option>
+      </select>
+    </td>
+    <td>
+      <select class="form-control" id="br-product-${i}" onchange="onBatchProductChange(${i})" style="min-width:160px">
+        <option value="">— 선택 —</option>${window._batchOptions}
+      </select>
+    </td>
+    <td><input class="form-control" id="br-price-${i}" type="number" placeholder="0" oninput="calcBatchTotal(${i})" style="min-width:90px"></td>
+    <td><input class="form-control" id="br-qty-${i}"   type="number" placeholder="0" oninput="calcBatchTotal(${i})" style="min-width:70px"></td>
+    <td><input class="form-control" id="br-total-${i}" readonly style="background:var(--bg);color:var(--accent);font-weight:700;min-width:100px"></td>
+    <td><input class="form-control" id="br-note-${i}" placeholder="메모" style="min-width:100px"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="removeBatchRow(${i})">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function removeBatchRow(i) {
+  const row = document.getElementById(`batch-row-${i}`);
+  if (row) row.remove();
+}
+
+function onBatchProductChange(i) {
+  const sel  = document.getElementById(`br-product-${i}`);
+  const opt  = sel.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  const type = document.getElementById(`br-type-${i}`).value;
+  const price = type === '입고' ? opt.dataset.purchase : opt.dataset.sale;
+  document.getElementById(`br-price-${i}`).value = price || 0;
+  calcBatchTotal(i);
+}
+
+function onBatchTypeChange(i) {
+  const sel  = document.getElementById(`br-product-${i}`);
+  const opt  = sel.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  const type = document.getElementById(`br-type-${i}`).value;
+  const price = type === '입고' ? opt.dataset.purchase : opt.dataset.sale;
+  document.getElementById(`br-price-${i}`).value = price || 0;
+  calcBatchTotal(i);
+}
+
+function calcBatchTotal(i) {
+  const p = Number(document.getElementById(`br-price-${i}`).value) || 0;
+  const q = Number(document.getElementById(`br-qty-${i}`).value)   || 0;
+  document.getElementById(`br-total-${i}`).value = (p * q).toLocaleString('ko-KR') + '원';
+}
+
+async function saveBatch() {
+  const tbody = document.getElementById('batch-tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr'));
+  const batchRows = [];
+
+  for (const tr of rows) {
+    const i = tr.id.replace('batch-row-', '');
+    const sel  = document.getElementById(`br-product-${i}`);
+    const opt  = sel?.selectedOptions[0];
+    if (!opt || !opt.value) continue; // 상품 미선택 행 스킵
+
+    const date  = document.getElementById(`br-date-${i}`)?.value;
+    const type  = document.getElementById(`br-type-${i}`)?.value;
+    const price = Number(document.getElementById(`br-price-${i}`)?.value) || 0;
+    const qty   = Number(document.getElementById(`br-qty-${i}`)?.value)   || 0;
+    const note  = document.getElementById(`br-note-${i}`)?.value || '';
+    if (!date || !qty) continue;
+
+    const item = (window._batchAllItems || []).find(p => p.id === opt.value);
+    const total = price * qty;
+    const txData = {
+      date, type,
+      ref_id:       opt.value,
+      ref_type:     opt.dataset.refType,
+      product_name: opt.text.split(' (')[0],
+      product_code: opt.dataset.code,
+      unit_price:   price, qty, total, note
+    };
+
+    batchRows.push({ sheet: 'transactions', data: txData });
+
+    if (['출고','서비스','파손','샘플'].includes(type)) {
+      batchRows.push({ sheet: 'sales', data: {
+        date, type,
+        product_name: txData.product_name, product_code: txData.product_code,
+        unit_price: price, qty, total,
+        is_loss: type !== '출고', note
+      }});
+    }
+    if (type === '입고') {
+      batchRows.push({ sheet: 'purchases', data: {
+        date, supplier: '',
+        product_name: txData.product_name, product_code: txData.product_code,
+        unit_price: price, qty, total, note
+      }});
+    }
+  }
+
+  if (!batchRows.length) { toast('등록할 항목이 없습니다', 'error'); return; }
+
+  const r = await apiPost({ action: 'insertBatch', rows: batchRows });
+  if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
+
+  toast(`✅ ${batchRows.filter(r => r.sheet === 'transactions').length}건 일괄 등록 완료`);
+  closeModal();
   renderTransactions();
 }
 
