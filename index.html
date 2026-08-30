@@ -576,24 +576,9 @@ async function renderProducts() {
 
   const r = await apiGet({ action: 'getAll', sheet: 'products' });
   const data = r.data || [];
-
-  const rows = data.length ? data.map(p => {
-    const lowClass = (p.min_stock && Number(p.stock_qty) <= Number(p.min_stock)) ? 'color:var(--yellow);font-weight:700' : '';
-    return `<tr>
-      <td><span class="amount-neu" style="font-size:11px">${p.product_code || '-'}</span></td>
-      <td style="font-weight:500">${p.product_name}</td>
-      <td>${p.category || '-'}</td>
-      <td style="${lowClass}">${fmtN(p.stock_qty)} ${p.unit || ''} ${lowClass ? '⚠️' : ''}</td>
-      <td style="color:var(--red)">${fmt(p.purchase_price)}</td>
-      <td style="color:var(--green)">${fmt(p.sale_price)}</td>
-      <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
-      <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
-      </td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="8" class="loading">등록된 상품이 없습니다</td></tr>';
+  window._productsData = data;
+  window._productsSortKey = '';
+  window._productsSearch = '';
 
   document.getElementById('content').innerHTML = `
     <div class="filter-bar">
@@ -613,11 +598,11 @@ async function renderProducts() {
     <div class="table-wrap" id="products-table">
       <table>
         <thead><tr><th>상품코드</th><th>상품명</th><th>카테고리</th><th>재고수량</th><th>매입단가</th><th>매출단가</th><th>최소재고</th><th>비고</th><th>관리</th></tr></thead>
-        <tbody id="products-body">${rows}</tbody>
+        <tbody id="products-body"></tbody>
       </table>
     </div>`;
-  window._productsData = data;
-  window._productsSortKey = '';
+
+  applyProductsView();
 }
 
 function getProductRows(data) {
@@ -854,20 +839,8 @@ async function renderTransactions() {
      <button class="btn btn-primary" onclick="openTransactionModal()">+ 입출고 등록</button>`;
   const r = await apiGet({ action: 'getAll', sheet: 'transactions' });
   const data = (r.data || []).reverse();
-
-  const rows = data.length ? data.map(t => `<tr>
-    <td>${fmtDate(t.date)}</td>
-    <td>${typeBadge(t.type)}</td>
-    <td style="font-weight:500">${t.product_name || '-'}</td>
-    <td style="font-size:11px;color:var(--text3)">${t.product_code || '-'}</td>
-    <td class="amount-neu">${fmtN(t.qty)}</td>
-    <td>${fmt(t.unit_price)}</td>
-    <td class="${t.type === '입고' ? 'amount-pos' : 'amount-neg'}">${fmt(t.total)}</td>
-    <td style="font-size:12px;color:var(--text2)">${t.note || ''}</td>
-    <td>
-      <button class="btn btn-danger btn-sm" onclick="deleteTx('${t.id}')">삭제</button>
-    </td>
-  </tr>`).join('') : '<tr><td colspan="9" class="loading">입출고 내역이 없습니다</td></tr>';
+  window._txData = data;
+  window._txFilters = { q: '', type: '', from: '', to: '', sort: 'date_desc' };
 
   document.getElementById('content').innerHTML = `
     <div class="filter-bar">
@@ -881,7 +854,7 @@ async function renderTransactions() {
       </select>
       <select class="filter-select" onchange="sortTx(this.value)">
         <option value="">정렬 기준</option>
-        <option value="date_desc">날짜 최신순 ↓</option>
+        <option value="date_desc" selected>날짜 최신순 ↓</option>
         <option value="date_asc">날짜 오래된순 ↑</option>
         <option value="name_asc">상품명 가나다순 ↑</option>
         <option value="code_asc">상품코드 오름차순 ↑</option>
@@ -895,11 +868,11 @@ async function renderTransactions() {
     <div class="table-wrap">
       <table>
         <thead><tr><th>날짜</th><th>구분</th><th>상품명</th><th>코드</th><th>수량</th><th>단가</th><th>총액</th><th>비고</th><th>관리</th></tr></thead>
-        <tbody id="tx-body">${rows}</tbody>
+        <tbody id="tx-body"></tbody>
       </table>
     </div>`;
-  window._txData = data;
-  window._txFilters = { q: '', type: '', from: '', to: '', sort: 'date_desc' };
+
+  applyTxFilters();
 }
 
 function applyTxFilters() {
