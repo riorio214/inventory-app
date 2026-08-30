@@ -600,6 +600,15 @@ async function renderProducts() {
       <div class="search-box"><span class="search-icon">🔍</span>
         <input type="text" placeholder="상품명, 코드 검색..." oninput="searchProducts(this.value)">
       </div>
+      <select class="filter-select" onchange="sortProducts(this.value)">
+        <option value="">정렬 기준 선택</option>
+        <option value="code_asc">상품코드 오름차순 ↑</option>
+        <option value="code_desc">상품코드 내림차순 ↓</option>
+        <option value="name_asc">상품명 가나다순 ↑</option>
+        <option value="name_desc">상품명 역순 ↓</option>
+        <option value="stock_asc">재고 적은순 ↑</option>
+        <option value="stock_desc">재고 많은순 ↓</option>
+      </select>
     </div>
     <div class="table-wrap" id="products-table">
       <table>
@@ -608,26 +617,51 @@ async function renderProducts() {
       </table>
     </div>`;
   window._productsData = data;
+  window._productsSortKey = '';
+}
+
+function getProductRows(data) {
+  return data.length ? data.map(p => {
+    const lowClass = (p.min_stock && Number(p.stock_qty) <= Number(p.min_stock)) ? 'color:var(--yellow);font-weight:700' : '';
+    return `<tr>
+      <td><span class="amount-neu" style="font-size:11px">${p.product_code || '-'}</span></td>
+      <td style="font-weight:500">${p.product_name}</td>
+      <td>${p.category || '-'}</td>
+      <td style="${lowClass}">${fmtN(p.stock_qty)} ${p.unit || ''} ${lowClass ? '⚠️' : ''}</td>
+      <td style="color:var(--red)">${fmt(p.purchase_price)}</td>
+      <td style="color:var(--green)">${fmt(p.sale_price)}</td>
+      <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
+      <td style="font-size:12px;color:var(--text2)">${p.note || ''}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="loading">결과 없음</td></tr>';
+}
+
+function applyProductsView() {
+  let data = [...(window._productsData || [])];
+  const q = window._productsSearch || '';
+  const s = window._productsSortKey || '';
+  if (q) data = data.filter(p => (p.product_name||'').includes(q) || (p.product_code||'').includes(q));
+  if (s === 'code_asc')   data.sort((a,b) => (a.product_code||'').localeCompare(b.product_code||''));
+  if (s === 'code_desc')  data.sort((a,b) => (b.product_code||'').localeCompare(a.product_code||''));
+  if (s === 'name_asc')   data.sort((a,b) => (a.product_name||'').localeCompare(b.product_name||'', 'ko'));
+  if (s === 'name_desc')  data.sort((a,b) => (b.product_name||'').localeCompare(a.product_name||'', 'ko'));
+  if (s === 'stock_asc')  data.sort((a,b) => Number(a.stock_qty||0) - Number(b.stock_qty||0));
+  if (s === 'stock_desc') data.sort((a,b) => Number(b.stock_qty||0) - Number(a.stock_qty||0));
+  document.getElementById('products-body').innerHTML = getProductRows(data);
 }
 
 function searchProducts(q) {
-  const filtered = (window._productsData || []).filter(p =>
-    (p.product_name || '').includes(q) || (p.product_code || '').includes(q)
-  );
-  document.getElementById('products-body').innerHTML = filtered.length
-    ? filtered.map(p => `<tr>
-        <td><span class="amount-neu" style="font-size:11px">${p.product_code || '-'}</span></td>
-        <td style="font-weight:500">${p.product_name}</td>
-        <td>${p.category || '-'}</td>
-        <td>${fmtN(p.stock_qty)} ${p.unit || ''}</td>
-        <td>${fmt(p.unit_price)}</td>
-        <td style="font-size:11px;color:var(--text3)">${p.min_stock || '-'}</td>
-        <td>
-          <button class="btn btn-ghost btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>수정</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}','${p.product_name}')">삭제</button>
-        </td>
-      </tr>`).join('')
-    : '<tr><td colspan="7" class="loading">검색 결과 없음</td></tr>';
+  window._productsSearch = q;
+  applyProductsView();
+}
+
+function sortProducts(key) {
+  window._productsSortKey = key;
+  applyProductsView();
 }
 
 function openProductModal(p = null) {
@@ -845,6 +879,15 @@ async function renderTransactions() {
         <option>입고</option><option>출고</option><option>서비스</option>
         <option>파손</option><option>샘플</option>
       </select>
+      <select class="filter-select" onchange="sortTx(this.value)">
+        <option value="">정렬 기준</option>
+        <option value="date_desc">날짜 최신순 ↓</option>
+        <option value="date_asc">날짜 오래된순 ↑</option>
+        <option value="name_asc">상품명 가나다순 ↑</option>
+        <option value="code_asc">상품코드 오름차순 ↑</option>
+        <option value="total_desc">금액 높은순 ↓</option>
+        <option value="total_asc">금액 낮은순 ↑</option>
+      </select>
       <input type="date" class="filter-date" onchange="filterTxDate(this.value,'from')">
       <span style="color:var(--text3);font-size:13px">~</span>
       <input type="date" class="filter-date" onchange="filterTxDate(this.value,'to')">
@@ -856,16 +899,23 @@ async function renderTransactions() {
       </table>
     </div>`;
   window._txData = data;
-  window._txFilters = { q: '', type: '', from: '', to: '' };
+  window._txFilters = { q: '', type: '', from: '', to: '', sort: 'date_desc' };
 }
 
 function applyTxFilters() {
   const f = window._txFilters;
-  let d = window._txData || [];
-  if (f.q) d = d.filter(t => (t.product_name || '').includes(f.q));
+  let d = [...(window._txData || [])];
+  if (f.q)    d = d.filter(t => (t.product_name || '').includes(f.q));
   if (f.type) d = d.filter(t => t.type === f.type);
   if (f.from) d = d.filter(t => fmtDate(t.date) >= f.from);
   if (f.to)   d = d.filter(t => fmtDate(t.date) <= f.to);
+  // 정렬
+  if (f.sort === 'date_desc') d.sort((a,b) => fmtDate(b.date).localeCompare(fmtDate(a.date)));
+  if (f.sort === 'date_asc')  d.sort((a,b) => fmtDate(a.date).localeCompare(fmtDate(b.date)));
+  if (f.sort === 'name_asc')  d.sort((a,b) => (a.product_name||'').localeCompare(b.product_name||'', 'ko'));
+  if (f.sort === 'code_asc')  d.sort((a,b) => (a.product_code||'').localeCompare(b.product_code||''));
+  if (f.sort === 'total_desc') d.sort((a,b) => Number(b.total||0) - Number(a.total||0));
+  if (f.sort === 'total_asc')  d.sort((a,b) => Number(a.total||0) - Number(b.total||0));
   document.getElementById('tx-body').innerHTML = d.length
     ? d.map(t => `<tr>
         <td>${fmtDate(t.date)}</td><td>${typeBadge(t.type)}</td>
@@ -884,6 +934,7 @@ function filterTx(q, type) {
   applyTxFilters();
 }
 function filterTxDate(val, side) { window._txFilters[side] = val; applyTxFilters(); }
+function sortTx(key) { window._txFilters.sort = key; applyTxFilters(); }
 
 async function openTransactionModal() {
   const [pr, ir] = await Promise.all([
