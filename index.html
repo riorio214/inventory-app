@@ -577,7 +577,7 @@ async function renderProducts() {
   const r = await apiGet({ action: 'getAll', sheet: 'products' });
   const data = r.data || [];
   window._productsData = data;
-  window._productsSortKey = '';
+  window._productsSortKey = 'code_asc';
   window._productsSearch = '';
 
   document.getElementById('content').innerHTML = `
@@ -587,7 +587,7 @@ async function renderProducts() {
       </div>
       <select class="filter-select" onchange="sortProducts(this.value)">
         <option value="">정렬 기준 선택</option>
-        <option value="code_asc">상품코드 오름차순 ↑</option>
+        <option value="code_asc" selected>상품코드 오름차순 ↑</option>
         <option value="code_desc">상품코드 내림차순 ↓</option>
         <option value="name_asc">상품명 가나다순 ↑</option>
         <option value="name_desc">상품명 역순 ↓</option>
