@@ -914,8 +914,8 @@ async function openTransactionModal() {
     apiGet({ action: 'getAll', sheet: 'products' }),
     apiGet({ action: 'getAll', sheet: 'items' })
   ]);
-  const products = pr.data || [];
-  const items    = ir.data || [];
+  const products = (pr.data || []).sort((a,b) => (a.product_code||'').localeCompare(b.product_code||''));
+  const items    = (ir.data || []).sort((a,b) => (a.item_code||'').localeCompare(b.item_code||''));
 
   const prodItems = products.map(p =>
     `<div class="product-picker-item" onclick="selectTxProduct(this,'${p.id}','product','${p.product_name}','${p.product_code || ''}','${p.purchase_price || 0}','${p.sale_price || 0}')">
@@ -1112,12 +1112,12 @@ async function openBatchModal() {
     apiGet({ action: 'getAll', sheet: 'products' }),
     apiGet({ action: 'getAll', sheet: 'items' })
   ]);
-  const products = pr.data || [];
-  const items    = ir.data || [];
+  const products = (pr.data || []).sort((a,b) => (a.product_code||'').localeCompare(b.product_code||''));
+  const items    = (ir.data || []).sort((a,b) => (a.item_code||'').localeCompare(b.item_code||''));
   const allItems = [
     ...products.map(p => ({ id: p.id, refType: 'product', name: p.product_name, code: p.product_code || '', purchasePrice: p.purchase_price || 0, salePrice: p.sale_price || 0 })),
     ...items.map(p =>    ({ id: p.id, refType: 'item',    name: p.item_name,    code: p.item_code    || '', purchasePrice: p.purchase_price || 0, salePrice: p.sale_price || 0 }))
-  ];
+  ].sort((a,b) => a.code.localeCompare(b.code));
 
   const optionsHtml = allItems.map(p =>
     `<option value="${p.id}" data-ref-type="${p.refType}" data-code="${p.code}" data-purchase="${p.purchasePrice}" data-sale="${p.salePrice}">${p.name} (${p.code || '-'})</option>`
