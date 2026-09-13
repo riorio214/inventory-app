@@ -318,44 +318,102 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbymJQZYib6C8CsZpL4eqllM
 const API_KEY = 'rio214-secret-key-2026';
 
 // ═══════════════════════════════════════════════════
-//  캐시 시스템 (60초 유효)
+//  글로벌 메모리 스토어
+//  앱 시작 시 전체 데이터를 한 번에 로드,
+//  이후 페이지 이동은 메모리에서 즉시 표시
 // ═══════════════════════════════════════════════════
-const _cache = {};
-const CACHE_TTL = 60 * 1000; // 60초
+const DB = {
+  products:     [],
+  items:        [],
+  transactions: [],
+  purchases:    [],
+  sales:        [],
+  audit_log:    [],
+  summary:      null,
+  _loaded:      {}  // 각 시트 로드 완료 여부
+};
 
-function cacheKey(params) { return JSON.stringify(params); }
-
-function getCache(key) {
-  const c = _cache[key];
-  if (!c) return null;
-  if (Date.now() - c.ts > CACHE_TTL) { delete _cache[key]; return null; }
-  return c.data;
+// 특정 시트만 재로딩 (쓰기 후 호출)
+async function reloadSheet(sheetName) {
+  const res = await _apiFetch({ action: 'getAll', sheet: sheetName });
+  if (res.success) DB[sheetName] = res.data || [];
 }
 
-function setCache(key, data) { _cache[key] = { data, ts: Date.now() }; }
+// 대시보드 summary 재계산
+async function reloadSummary() {
+  const res = await _apiFetch({ action: 'summary' });
+  if (res.success) DB.summary = res.data;
+}
 
-function invalidateCache() {
-  // 쓰기 작업 후 전체 캐시 초기화 (대시보드 포함 모든 페이지 최신화)
-  Object.keys(_cache).forEach(k => delete _cache[k]);
+// 앱 시작 시 전체 데이터 한 번에 로드
+async function loadAllData() {
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px">
+      <div style="font-size:32px">📦</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text)">데이터 불러오는 중...</div>
+      <div style="font-size:12px;color:var(--text3)">처음 한 번만 로딩합니다</div>
+      <div style="width:200px;height:4px;background:var(--surface2);border-radius:4px;overflow:hidden">
+        <div id="load-bar" style="height:100%;width:0%;background:var(--accent);border-radius:4px;transition:width 0.3s"></div>
+      </div>
+      <div id="load-status" style="font-size:12px;color:var(--text3)">연결 중...</div>
+    </div>`;
+
+  const setProgress = (pct, msg) => {
+    const bar = document.getElementById('load-bar');
+    const status = document.getElementById('load-status');
+    if (bar) bar.style.width = pct + '%';
+    if (status) status.textContent = msg;
+  };
+
+  try {
+    // 병렬로 전체 로드
+    setProgress(10, '상품 목록 로드 중...');
+    const [pRes, iRes, tRes, puRes, sRes, sumRes, aRes] = await Promise.all([
+      _apiFetch({ action: 'getAll', sheet: 'products' }),
+      _apiFetch({ action: 'getAll', sheet: 'items' }),
+      _apiFetch({ action: 'getAll', sheet: 'transactions' }),
+      _apiFetch({ action: 'getAll', sheet: 'purchases' }),
+      _apiFetch({ action: 'getAll', sheet: 'sales' }),
+      _apiFetch({ action: 'summary' }),
+      _apiFetch({ action: 'getAll', sheet: 'audit_log' }),
+    ]);
+    setProgress(90, '화면 구성 중...');
+
+    DB.products     = pRes.data   || [];
+    DB.items        = iRes.data   || [];
+    DB.transactions = tRes.data   || [];
+    DB.purchases    = puRes.data  || [];
+    DB.sales        = sRes.data   || [];
+    DB.summary      = sumRes.data || null;
+    DB.audit_log    = aRes.data   || [];
+
+    setProgress(100, '완료!');
+    await new Promise(r => setTimeout(r, 300)); // 완료 표시 잠깐 보여주기
+  } catch(err) {
+    document.getElementById('content').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div><p>데이터 로드 실패: ${err.message}<br><button class="btn btn-primary" style="margin-top:12px" onclick="loadAllData()">다시 시도</button></p></div>`;
+    return false;
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════
 //  API 헬퍼
 // ═══════════════════════════════════════════════════
-async function apiGet(params, useCache = true) {
-  const key = cacheKey(params);
-  if (useCache) {
-    const cached = getCache(key);
-    if (cached) return cached;
-  }
+async function _apiFetch(params) {
+  // 내부 전용 순수 fetch (캐시 없음)
   params.key = API_KEY;
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${API_URL}?${qs}`);
-  const data = await res.json();
-  if (data.success) setCache(key, data);
-  return data;
+  return res.json();
 }
 
+// GET: 메모리에서 즉시 반환 (API 호출 없음)
+function dbGet(sheetName) {
+  return { success: true, data: DB[sheetName] || [] };
+}
+
+// POST: API 호출 후 관련 시트 메모리 갱신
 async function apiPost(body) {
   body.key = API_KEY;
   const res = await fetch(API_URL, {
@@ -364,9 +422,29 @@ async function apiPost(body) {
     headers: { 'Content-Type': 'text/plain' }
   });
   const data = await res.json();
-  // 쓰기 후 전체 캐시 무효화 (대시보드까지 최신화)
-  invalidateCache();
+  if (data.success) {
+    // 쓰기 후 관련 시트만 백그라운드 재로딩
+    const sheetsToReload = new Set();
+    if (body.sheet) sheetsToReload.add(body.sheet);
+    if (body.rows)  body.rows.forEach(r => sheetsToReload.add(r.sheet));
+    // summary는 항상 갱신
+    const reloadJobs = [...sheetsToReload].map(s => reloadSheet(s));
+    reloadJobs.push(reloadSummary());
+    Promise.all(reloadJobs); // 백그라운드 (await 안 함 — UI 안 막음)
+  }
   return data;
+}
+
+// 기존 코드 호환용 (apiGet 호출부 대신 dbGet 사용)
+function apiGet(params) {
+  if (params.action === 'getAll') return Promise.resolve(dbGet(params.sheet));
+  if (params.action === 'summary') return Promise.resolve({ success: true, data: DB.summary });
+  if (params.action === 'getById') {
+    const row = (DB[params.sheet] || []).find(r => String(r.id) === String(params.id));
+    return Promise.resolve({ success: !!row, data: row || null });
+  }
+  // 그 외는 실제 API 호출
+  return _apiFetch(params);
 }
 
 // ═══════════════════════════════════════════════════
@@ -453,9 +531,10 @@ function typeBadge(type) {
   return `<span class="badge ${map[type] || 'badge-gray'}">${type}</span>`;
 }
 
-function refreshPage() {
-  // 전체 캐시 초기화 후 현재 페이지 강제 새로고침
-  Object.keys(_cache).forEach(k => delete _cache[k]);
+async function refreshPage() {
+  // 전체 데이터 재로딩 후 현재 페이지 갱신
+  toast('데이터 갱신 중...');
+  await loadAllData();
   navigate(currentPage);
   toast('최신 데이터로 갱신했습니다');
 }
@@ -486,17 +565,6 @@ function getSubmitBtn() {
   return btns[btns.length - 1];
 }
 
-// ═══════════════════════════════════════════════════
-//  프리패치 (백그라운드에서 미리 로드)
-// ═══════════════════════════════════════════════════
-function prefetchAll() {
-  // 대시보드 로드 후 백그라운드에서 나머지 페이지 데이터 미리 캐시
-  setTimeout(() => apiGet({ action: 'getAll', sheet: 'products' }), 500);
-  setTimeout(() => apiGet({ action: 'getAll', sheet: 'items' }), 1000);
-  setTimeout(() => apiGet({ action: 'getAll', sheet: 'transactions' }), 1500);
-  setTimeout(() => apiGet({ action: 'getAll', sheet: 'purchases' }), 2000);
-  setTimeout(() => apiGet({ action: 'getAll', sheet: 'sales' }), 2500);
-}
 let currentPage = 'dashboard';
 const pageTitles = {
   dashboard: '대시보드', products: '상품 관리', items: '비상품 관리',
@@ -542,9 +610,9 @@ document.getElementById('modal').addEventListener('click', e => { if (e.target =
 //  대시보드
 // ═══════════════════════════════════════════════════
 async function renderDashboard() {
-  const r = await apiGet({ action: 'summary' });
-  if (!r.success) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>데이터를 불러올 수 없습니다</p></div>'; return; }
-  const d = r.data;
+  // 메모리에서 즉시 읽기 (API 호출 없음)
+  const d = DB.summary;
+  if (!d) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>데이터를 불러올 수 없습니다</p></div>'; return; }
   const profit = d.thisMonthProfit;
 
   let lowBanner = '';
@@ -553,9 +621,8 @@ async function renderDashboard() {
     lowBanner = `<div class="low-stock-banner">⚠️ 재고 부족 상품 ${d.lowStockCount}개: <strong>${names}</strong></div>`;
   }
 
-  // 최근 거래 내역
-  const tRes = await apiGet({ action: 'getAll', sheet: 'transactions' });
-  const recent = (tRes.data || []).slice(-8).reverse();
+  // 최근 거래 내역 (메모리에서 즉시)
+  const recent = [...DB.transactions].slice(-8).reverse();
   const recentRows = recent.length
     ? recent.map(r => `<tr>
         <td>${fmtDate(r.date)}</td>
@@ -599,9 +666,6 @@ async function renderDashboard() {
         </table>
       </div>
     </div>`;
-
-  // 대시보드 뜬 후 나머지 페이지 데이터 백그라운드 캐싱
-  prefetchAll();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1581,7 +1645,7 @@ function handleGoogleLogin(response) {
   showApp();
 }
 
-function showApp() {
+async function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   // 사이드바 하단에 사용자 정보 표시
   document.getElementById('sync-status').innerHTML = `
@@ -1593,7 +1657,9 @@ function showApp() {
     <div style="font-size:10px;color:var(--text3);margin-top:2px">${currentUser.email}</div>
     <button onclick="logout()" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text3);font-size:11px;padding:3px 8px;cursor:pointer;font-family:inherit">로그아웃</button>
   `;
-  navigate('dashboard');
+  // 전체 데이터 로드 후 대시보드 표시
+  const ok = await loadAllData();
+  if (ok) navigate('dashboard');
 }
 
 function logout() {
