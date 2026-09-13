@@ -461,8 +461,42 @@ function refreshPage() {
 }
 
 // ═══════════════════════════════════════════════════
-//  네비게이션
+//  버튼 잠금 유틸 (중복 클릭 방지)
 // ═══════════════════════════════════════════════════
+function lockBtn(btnEl, loadingText = '저장 중...') {
+  if (!btnEl) return;
+  btnEl.disabled = true;
+  btnEl._origText = btnEl.innerHTML;
+  btnEl.innerHTML = `⏳ ${loadingText}`;
+  btnEl.style.opacity = '0.7';
+  btnEl.style.cursor = 'not-allowed';
+}
+function unlockBtn(btnEl) {
+  if (!btnEl) return;
+  btnEl.disabled = false;
+  btnEl.innerHTML = btnEl._origText || '저장';
+  btnEl.style.opacity = '';
+  btnEl.style.cursor = '';
+}
+// 모달 푸터의 마지막(저장) 버튼 가져오기
+function getSubmitBtn() {
+  const footer = document.getElementById('modal-footer');
+  if (!footer) return null;
+  const btns = footer.querySelectorAll('button');
+  return btns[btns.length - 1];
+}
+
+// ═══════════════════════════════════════════════════
+//  프리패치 (백그라운드에서 미리 로드)
+// ═══════════════════════════════════════════════════
+function prefetchAll() {
+  // 대시보드 로드 후 백그라운드에서 나머지 페이지 데이터 미리 캐시
+  setTimeout(() => apiGet({ action: 'getAll', sheet: 'products' }), 500);
+  setTimeout(() => apiGet({ action: 'getAll', sheet: 'items' }), 1000);
+  setTimeout(() => apiGet({ action: 'getAll', sheet: 'transactions' }), 1500);
+  setTimeout(() => apiGet({ action: 'getAll', sheet: 'purchases' }), 2000);
+  setTimeout(() => apiGet({ action: 'getAll', sheet: 'sales' }), 2500);
+}
 let currentPage = 'dashboard';
 const pageTitles = {
   dashboard: '대시보드', products: '상품 관리', items: '비상품 관리',
@@ -565,6 +599,9 @@ async function renderDashboard() {
         </table>
       </div>
     </div>`;
+
+  // 대시보드 뜬 후 나머지 페이지 데이터 백그라운드 캐싱
+  prefetchAll();
 }
 
 // ═══════════════════════════════════════════════════
@@ -698,22 +735,25 @@ function openProductModal(p = null) {
 }
 
 async function saveProduct(id) {
+  const btn = getSubmitBtn();
+  lockBtn(btn, id ? '수정 중...' : '등록 중...');
   const data = {
     product_code: document.getElementById('f-code').value,
     product_name: document.getElementById('f-name').value,
     category:     document.getElementById('f-category').value,
     unit:         document.getElementById('f-unit').value,
-    unit_price:      document.getElementById('f-purchase-price').value, // 하위호환 유지
+    unit_price:      document.getElementById('f-purchase-price').value,
     purchase_price:  document.getElementById('f-purchase-price').value,
     sale_price:      document.getElementById('f-sale-price').value,
     stock_qty:    document.getElementById('f-stock').value,
     min_stock:    document.getElementById('f-min').value,
     note:         document.getElementById('f-note').value,
   };
-  if (!data.product_name) { toast('상품명은 필수입니다', 'error'); return; }
+  if (!data.product_name) { toast('상품명은 필수입니다', 'error'); unlockBtn(btn); return; }
   const r = id
     ? await apiPost({ action: 'update', sheet: 'products', id, data })
     : await apiPost({ action: 'insert', sheet: 'products', data });
+  unlockBtn(btn);
   if (r.success) { toast(id ? '수정되었습니다' : '등록되었습니다'); closeModal(); renderProducts(); }
   else toast(r.error || '오류 발생', 'error');
 }
@@ -804,21 +844,24 @@ function openItemModal(p = null) {
 }
 
 async function saveItem(id) {
+  const btn = getSubmitBtn();
+  lockBtn(btn, id ? '수정 중...' : '등록 중...');
   const data = {
-    item_code:  document.getElementById('fi-code').value,
-    item_name:  document.getElementById('fi-name').value,
-    category:   document.getElementById('fi-cat').value,
-    unit:       document.getElementById('fi-unit').value,
-    unit_price:       document.getElementById('fi-purchase-price').value, // 하위호환
+    item_code:        document.getElementById('fi-code').value,
+    item_name:        document.getElementById('fi-name').value,
+    category:         document.getElementById('fi-cat').value,
+    unit:             document.getElementById('fi-unit').value,
+    unit_price:       document.getElementById('fi-purchase-price').value,
     purchase_price:   document.getElementById('fi-purchase-price').value,
     sale_price:       document.getElementById('fi-sale-price').value,
-    stock_qty:  document.getElementById('fi-stock').value,
-    note:       document.getElementById('fi-note').value,
+    stock_qty:        document.getElementById('fi-stock').value,
+    note:             document.getElementById('fi-note').value,
   };
-  if (!data.item_name) { toast('품목명은 필수입니다', 'error'); return; }
+  if (!data.item_name) { toast('품목명은 필수입니다', 'error'); unlockBtn(btn); return; }
   const r = id
     ? await apiPost({ action: 'update', sheet: 'items', id, data })
     : await apiPost({ action: 'insert', sheet: 'items', data });
+  unlockBtn(btn);
   if (r.success) { toast(id ? '수정되었습니다' : '등록되었습니다'); closeModal(); renderItems(); }
   else toast(r.error || '오류 발생', 'error');
 }
@@ -1025,6 +1068,8 @@ function calcTxTotal() {
 }
 
 async function saveTx() {
+  const btn = getSubmitBtn();
+  lockBtn(btn, '등록 중...');
   const data = {
     date:         document.getElementById('tx-date').value,
     type:         document.getElementById('tx-type').value,
@@ -1037,11 +1082,9 @@ async function saveTx() {
     total:        (Number(document.getElementById('tx-price').value) * Number(document.getElementById('tx-qty').value)),
     note:         document.getElementById('tx-note').value,
   };
-  if (!data.date || !data.qty) { toast('날짜와 수량은 필수입니다', 'error'); return; }
+  if (!data.date || !data.qty) { toast('날짜와 수량은 필수입니다', 'error'); unlockBtn(btn); return; }
 
-  // insertBatch로 한 번에 전송 (속도 개선)
   const batchRows = [{ sheet: 'transactions', data }];
-
   if (['출고','서비스','파손','샘플'].includes(data.type)) {
     batchRows.push({ sheet: 'sales', data: {
       date: data.date, type: data.type,
@@ -1058,10 +1101,9 @@ async function saveTx() {
       note: data.note
     }});
   }
-
   const r = await apiPost({ action: 'insertBatch', rows: batchRows });
+  unlockBtn(btn);
   if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
-
   toast('입출고 등록 완료'); closeModal(); renderTransactions();
 }
 
@@ -1234,6 +1276,8 @@ function calcBatchTotal(i) {
 }
 
 async function saveBatch() {
+  const btn = getSubmitBtn();
+  lockBtn(btn, '저장 중...');
   const tbody = document.getElementById('batch-tbody');
   const rows  = Array.from(tbody.querySelectorAll('tr'));
   const batchRows = [];
@@ -1281,9 +1325,10 @@ async function saveBatch() {
     }
   }
 
-  if (!batchRows.length) { toast('등록할 항목이 없습니다', 'error'); return; }
+  if (!batchRows.length) { toast('등록할 항목이 없습니다', 'error'); unlockBtn(btn); return; }
 
   const r = await apiPost({ action: 'insertBatch', rows: batchRows });
+  unlockBtn(btn);
   if (!r.success) { toast(r.error || '오류 발생', 'error'); return; }
 
   toast(`✅ ${batchRows.filter(r => r.sheet === 'transactions').length}건 일괄 등록 완료`);
